@@ -1,0 +1,10 @@
+; Standalone test harness for our own mod scripts. No original game assets.
+config_version=5
+
+[application]
+config/name="FTN Coop Development"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"

@@ -1,0 +1,18 @@
+FTN-Coop 0.1.0-dev
+
+The archive contains original FTN-Coop GDScript, installation scripts and
+documentation, provided under the accompanying restrictive LICENSE.
+The source is available for inspection; it is not open source. Unmodified
+personal, non-commercial play is permitted. Modification, code reuse and
+redistribution require permission except for the rights expressly reserved
+by LICENSE, including applicable GitHub platform rights and mandatory law.
+No additional third-party library is bundled.
+
+Find The Needle / Find The Needle Demo and its assets, native scripts,
+Godot engine, Steam integration and Steam SDK belong to their respective
+rights holders. None of these game binaries, scripts, assets or SDK files
+are distributed in this archive. Every player needs their own Steam demo
+installation. The mod uses the runtime already supplied with that game.
+
+This is an independent, unofficial mod. It is not endorsed by the game
+developer, Valve or the Godot project.

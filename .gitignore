@@ -1,0 +1,9 @@
+.tools/
+.godot/
+.superpowers/
+downloads/
+verification/
+dist/
+backups/
+*.log
+*.uid

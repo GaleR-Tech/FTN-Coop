@@ -1,0 +1,14 @@
+extends "res://mods/ftn_coop/game_adapter.gd"
+
+var native_saves: Node
+
+func _main_scene_path() -> String: return "res://tests/fixtures/save_world.tscn"
+func _menu_scene_path() -> String: return "res://tests/fixtures/save_menu.tscn"
+
+func bind(root: Node) -> Dictionary:
+	nodes = {"saves":native_saves}
+	var scene: Node = root.get_tree().current_scene
+	if scene!=null and scene.has_method("payload"):
+		nodes.world = scene
+		for role in ["field","state","tech","builds","props"]: nodes[role] = scene.get(role)
+	return {}
