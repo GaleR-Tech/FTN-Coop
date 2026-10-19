@@ -1,6 +1,8 @@
 extends SceneTree
 
 const SUITES := {
+	"mod_versions": "res://tests/test_mod_versions.gd",
+	"localization": "res://tests/test_localization.gd",
 	"script_load": "res://tests/test_script_load.gd",
 	"runtime_probe": "res://tests/test_runtime_probe.gd",
 	"game_adapter": "res://tests/test_game_adapter.gd",

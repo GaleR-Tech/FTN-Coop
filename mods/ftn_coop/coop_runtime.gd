@@ -47,10 +47,13 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	ui.leave_requested.connect(_leave)
 	ui.save_requested.connect(_save)
 	ui.copy_report_requested.connect(_copy_report)
+	ui.language_changed.connect(func():
+		if _is_guest(): _populate_actions()
+	)
 	ui.panel_toggled.connect(_on_panel_toggled)
 	ui.action_requested.connect(_request)
 	input_bridge.action_requested.connect(_on_primary)
-	network.problem.connect(func(code: String): ui.show_error(code))
+	network.problem.connect(func(code: String): ui.show_error(code,network.version_mismatch))
 	network.pose_received.connect(presence.apply_pose)
 	network.session.roster_changed.connect(_roster_changed)
 	network.session.state_changed.connect(_state_changed)
@@ -224,6 +227,12 @@ func _select_tool(index: int) -> void:
 func _populate_actions() -> void:
 	if not _adapter.has_method("guest_options"): return
 	var box: VBoxContainer = ui.action_container()
+	var choices: Dictionary = {}
+	for row in box.get_children():
+		for control in row.get_children():
+			if control is OptionButton and control.has_meta("ftn_choice") and control.selected>=0:
+				choices[control.get_meta("ftn_choice")] = control.get_item_metadata(control.selected)
+	box.set_meta("ftn_choices",choices)
 	for child in box.get_children():
 		box.remove_child(child)
 		child.queue_free()
@@ -254,12 +263,16 @@ func _option_row(box: Node, label: String, options: Array, button_text: String, 
 	var row := HBoxContainer.new()
 	box.add_child(row)
 	var selector := OptionButton.new()
+	selector.set_meta("ftn_choice",label)
 	selector.fit_to_longest_item = false
 	selector.custom_minimum_size.x = 120
 	selector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	selector.clip_text = true
 	for option in options:
-		selector.add_item(option.label)
+		var title: String = ui.tr_text(option.label_key) if option.has("label_key") else str(option.label)
+		if option.has("label_key") and option.has("price"): title += " · %.0f $" % float(option.price)
+		selector.add_item(title)
 		selector.set_item_metadata(selector.item_count-1,option.id)
+		if box.get_meta("ftn_choices",{}).get(label)==option.id: selector.select(selector.item_count-1)
 	row.add_child(selector)
 	ui._button(row,button_text,func(): callback.call(selector.get_item_metadata(selector.selected)))

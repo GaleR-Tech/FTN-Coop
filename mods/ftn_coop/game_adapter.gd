@@ -159,12 +159,14 @@ func guest_options() -> Dictionary:
 	if not guest_mode or not nodes.has("world") or not nodes.has("player"): return result
 	var tool_names := ["Hand","Schaufel","Heugabel","Besen","Spielzeug","Metalldetektor","Hofsauger","Feuerzeug"]
 	for index in range(tool_names.size()):
-		if bool(nodes.player.call("is_tool_unlocked",index)): result.tools.append({"id":index,"label":tool_names[index]})
+		if bool(nodes.player.call("is_tool_unlocked",index)): result.tools.append({"id":index,"label":tool_names[index],"label_key":tool_names[index]})
 	var shop_names := {"wheelbarrow":"Schubkarre","spade":"Spaten","pitchfork":"Heugabel","bucket":"Eimer","sand_shovel":"Sandschaufel"}
 	var shop: Node = nodes.world.get("shop")
 	if shop!=null:
 		for id in shop.call("display_ids"):
-			if shop_names.has(id): result.shop.append({"id":id,"label":shop_names[id]+" · %.0f $" % float(shop.call("live_price",id))})
+			if shop_names.has(id):
+				var price := float(shop.call("live_price",id))
+				result.shop.append({"id":id,"label":shop_names[id]+" · %.0f $" % price,"label_key":shop_names[id],"price":price})
 	var catalogue: Node = nodes.world.get("catalog_panel")
 	if catalogue!=null and catalogue.get("_tiles") is Dictionary:
 		for id in catalogue.get("_tiles"):

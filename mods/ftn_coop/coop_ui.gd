@@ -8,6 +8,7 @@ signal panel_toggled(open: bool)
 signal action_requested(kind: String, payload: Dictionary)
 signal tool_selected(index: int)
 signal copy_report_requested
+signal language_changed
 
 const ERRORS := {
 	"SESSION_FULL":"Die Sitzung ist voll. Maximal vier Spieler können gemeinsam spielen.",
@@ -66,9 +67,20 @@ var _load_total := 0
 var _report_build := "unbekannt"
 var _report_version := "unbekannt"
 var _last_problem: Dictionary = {}
+var _locale: RefCounted
+var _language_selector: OptionButton
+var _error_code := ""
+var _notice_kind := ""
+var _saved_time := ""
+var _summary: Dictionary = {}
+var _update: Button
+var _version_label: Label
+var _required_version := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_locale = load(get_script().resource_path.get_base_dir()+"/locale.gd").new()
+	_locale.load_preferences()
 	layer = 100
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -98,9 +110,18 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation",10)
 	scroll.add_child(box)
 	var title := Label.new()
-	title.text = "Find The Needle · Koop"
+	title.text = tr_text("Find The Needle · Koop")
+	title.set_meta("ftn_text","Find The Needle · Koop")
 	title.add_theme_font_size_override("font_size",23)
 	box.add_child(title)
+	_version_label = _label(box,"")
+	_label(box,"Sprache / Language")
+	_language_selector = OptionButton.new()
+	_language_selector.add_item("Deutsch")
+	_language_selector.add_item("English")
+	_language_selector.select(0 if _locale.language=="de" else 1)
+	box.add_child(_language_selector)
+	_language_selector.item_selected.connect(func(index: int): set_language("de" if index==0 else "en",true))
 	_status = _label(box,"Nicht verbunden · 0 / 4")
 	_progress = _label(box,"")
 	_hint = _label(box,_capability_text)
@@ -116,6 +137,11 @@ func _ready() -> void:
 	_error.add_theme_color_override("font_color",Color("ffcc99"))
 	_notice = _label(box,"")
 	_notice.add_theme_color_override("font_color",Color("a9e6b0"))
+	_update = _button(box,"Mod-Downloads öffnen",func():
+		var version: Script = load(get_script().resource_path.get_base_dir()+"/mod_version.gd")
+		OS.shell_open(version.DOWNLOAD_URL)
+	)
+	_update.visible = false
 	_button(box,"Fehlerbericht kopieren",func(): copy_report_requested.emit())
 	_label(box,"F2 öffnet und schließt dieses Menü.\nEntwicklungsstand · Internettest ausstehend.").add_theme_font_size_override("font_size",13)
 	set_panel_open(false)
@@ -150,23 +176,40 @@ func set_panel_open(open: bool) -> void:
 func is_panel_open() -> bool:
 	return _panel!=null and _panel.visible
 
-func show_error(code: String) -> void:
+func show_error(code: String, details: Dictionary={}) -> void:
+	_error_code = code if ERRORS.has(code) else "UNBEKANNTER_FEHLER"
+	var version: Script = load(get_script().resource_path.get_base_dir()+"/mod_version.gd")
+	_required_version = version.safe_version(details.get("required")) if code=="MOD_MISMATCH" else ""
 	_last_problem = _report_context()
-	_last_problem.error = code if ERRORS.has(code) else "UNBEKANNTER_FEHLER"
+	_last_problem.error = _error_code
+	if not _required_version.is_empty(): _last_problem.required_mod_version = _required_version
+	_notice_kind = ""
 	if _notice!=null: _notice.text = ""
-	if _error!=null: _error.text = ERRORS.get(code,"Die Aktion konnte nicht abgeschlossen werden. Versuche es erneut.")
+	_refresh_error()
 	set_panel_open(true)
+
+func _refresh_error() -> void:
+	if _error==null: return
+	_error.text = "" if _error_code.is_empty() else tr_text(ERRORS.get(_error_code,"Die Aktion konnte nicht abgeschlossen werden. Versuche es erneut."))
+	_update.visible = _error_code=="MOD_MISMATCH"
+	if _update.visible:
+		_error.text += "\n"+tr_text("Installiert: %s · Lobby benötigt: %s") % [tr_text(_report_version),tr_text(_required_version if not _required_version.is_empty() else "unbekannt")]
+		_error.text += "\n"+tr_text("Alle müssen dieselbe Mod-Version installieren und die Demo neu starten.")
 
 func error_text() -> String:
 	return _error.text if _error!=null else ""
 
 func clear_error() -> void:
+	_error_code = ""
+	_required_version = ""
+	if _update!=null: _update.visible = false
 	if _error!=null: _error.text = ""
 	_last_problem.clear()
 
 func configure_diagnostics(build: String, version: String) -> void:
 	_report_build = _report_value(build,"[0-9]{1,12}")
 	_report_version = _report_value(version,"[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(-[a-z0-9.]{1,16})?")
+	_refresh()
 
 func _report_value(value: String, pattern: String) -> String:
 	if value.length()>40: return "unbekannt"
@@ -182,68 +225,105 @@ func diagnostic_report() -> String:
 	# Only fixed fields and allowlisted values; never dump session/adapter data.
 	var context: Dictionary = _last_problem if not _last_problem.is_empty() else _report_context()
 	var engine: Dictionary = Engine.get_version_info()
-	return "FTN-Koop Fehlerbericht\nMod-Version: %s\nDemo-Build: %s\nGodot: %d.%d.%d\nSystem: %s\nSitzung: %s\nRolle: %s\nSpieler: %d / 4\nLadephase: %s\nEmpfangene Bytes: %d / %d\nFehler: %s\nInternettest: ausstehend\n" % [_report_version,_report_build,int(engine.major),int(engine.minor),int(engine.patch),"Windows" if OS.get_name()=="Windows" else "anderes",context.state,context.role,context.players,context.stage,context.received,context.total,context.error]
+	var report: String = tr_text("FTN-Koop Fehlerbericht\nMod-Version: %s\nDemo-Build: %s\nGodot: %d.%d.%d\nSystem: %s\nSitzung: %s\nRolle: %s\nSpieler: %d / 4\nLadephase: %s\nEmpfangene Bytes: %d / %d\nFehler: %s\nInternettest: ausstehend\n") % [tr_text(_report_version),tr_text(_report_build),int(engine.major),int(engine.minor),int(engine.patch),"Windows" if OS.get_name()=="Windows" else tr_text("anderes"),context.state,tr_text(context.role),context.players,context.stage,context.received,context.total,context.error]
+	if context.has("required_mod_version"): report += tr_text("Lobby-Mod-Version: %s\n") % context.required_mod_version
+	return report
 
 func set_load_progress(stage: String, received: int, total: int) -> void:
 	if stage not in ["idle","waiting","receiving","loading","catching_up","ready"]: return
 	_load_stage = stage
 	_load_total = clampi(total,0,64*1024*1024)
 	_load_received = clampi(received,0,_load_total)
+	_refresh()
+
+func _refresh_progress() -> void:
 	if _progress==null: return
 	var texts := {"idle":"","waiting":"Warte auf Weltdaten …","receiving":"Weltdaten werden empfangen …","loading":"Welt wird aufgebaut …","catching_up":"Gemeinsamer Fortschritt wird abgeglichen …","ready":""}
-	_progress.text = texts[stage]
-	if stage=="receiving" and _load_total>0:
-		_progress.text = "Weltdaten empfangen: %d %%" % int(100.0*_load_received/_load_total)
-	_refresh()
+	_progress.text = tr_text(texts[_load_stage])
+	if _load_stage=="receiving" and _load_total>0:
+		_progress.text = tr_text("Weltdaten empfangen: %d %%") % int(100.0*_load_received/_load_total)
 
 func progress_text() -> String:
 	return _progress.text if _progress!=null else ""
 
 func show_saved(clear_problem: bool=true) -> void:
 	if clear_problem: clear_error()
-	if _notice!=null: _notice.text = "Gemeinsamer Fortschritt gespeichert um "+Time.get_time_string_from_system()+"."
+	_notice_kind = "saved"
+	_saved_time = Time.get_time_string_from_system()
+	_refresh_notice()
 
 func show_report_copied() -> void:
-	if _notice!=null: _notice.text = "Fehlerbericht kopiert. Du kannst ihn vor dem Teilen prüfen."
+	_notice_kind = "copied"
+	_refresh_notice()
+
+func _refresh_notice() -> void:
+	if _notice==null: return
+	_notice.text = ""
+	if _notice_kind=="saved": _notice.text = tr_text("Gemeinsamer Fortschritt gespeichert um %s.") % _saved_time
+	elif _notice_kind=="copied": _notice.text = tr_text("Fehlerbericht kopiert. Du kannst ihn vor dem Teilen prüfen.")
 
 func notice_text() -> String:
 	return _notice.text if _notice!=null else ""
 
 func set_shared_summary(summary: Dictionary) -> void:
+	_summary = summary.duplicate()
 	if _shared==null: return
 	var playing: bool = _session!=null and _session.state==_session.State.PLAYING
 	_shared.visible = playing
 	if playing:
 		var needles := int(summary.get("needles",0))
-		_shared.text = "Gemeinsam: %.0f $ · %d %s" % [float(summary.get("money",0)),needles,"Nadel" if needles==1 else "Nadeln"]
-		_badge.text = "Koop · %.0f $ · F2" % float(summary.get("money",0))
-	else: _badge.text = "Koop · F2"
+		_shared.text = tr_text("Gemeinsam: %.0f $ · %d %s") % [float(summary.get("money",0)),needles,tr_text("Nadel" if needles==1 else "Nadeln")]
+		_badge.text = tr_text("Koop · %.0f $ · F2") % float(summary.get("money",0))
+	else: _badge.text = tr_text("Koop · F2")
 
 func action_container() -> VBoxContainer:
 	return _actions
 
 func _refresh() -> void:
 	if _status==null: return
+	_version_label.text = tr_text("Installierte Mod-Version: %s") % tr_text(_report_version)
+	_refresh_progress()
 	var offline: bool = _session==null or _session.state==_session.State.OFFLINE
 	var hosting: bool = not offline and _session.is_host
 	var playing: bool = not offline and _session.state==_session.State.PLAYING
 	_progress.visible = not offline and not hosting and not _closing and _load_stage not in ["idle","ready"]
 	var names := ["Nicht verbunden","Sitzung wird erstellt …","Verbindung wird hergestellt …","Welt wird vorbereitet …","Welt wird geladen …","Gemeinsam spielbereit"]
-	_status.text = names[_session.state if _session!=null else 0]+" · "+str(_session.roster.size() if _session!=null else 0)+" / 4"
+	_status.text = tr_text(names[_session.state if _session!=null else 0])+" · "+str(_session.roster.size() if _session!=null else 0)+" / 4"
 	_host.visible = offline
 	_host.disabled = not _host_available or _closing
 	_invite.visible = hosting
 	_save.visible = hosting and playing
 	_leave.visible = not offline
 	_actions.visible = playing and not hosting
-	_hint.text = _capability_text if offline else ("Du bist Host. Der gemeinsame Fortschritt gehört zu deinem Spielstand." if hosting else "Du spielst in der Welt des Hosts. Dein Einzelspielerstand bleibt getrennt.")
+	_hint.text = tr_text(_capability_text if offline else ("Du bist Host. Der gemeinsame Fortschritt gehört zu deinem Spielstand." if hosting else "Du spielst in der Welt des Hosts. Dein Einzelspielerstand bleibt getrennt."))
 	var lines := PackedStringArray()
 	if _session!=null:
-		for peer in _session.roster: lines.append("• "+str(_session.roster[peer].get("name","Mitspieler")))
+		for peer in _session.roster:
+			var member: Dictionary = _session.roster[peer]
+			var display_name: String = tr_text("Verbinden …") if member.get("state")=="connecting" and not member.get("accepted",false) else str(member.get("name",tr_text("Mitspieler")))
+			lines.append("• "+display_name)
 	_roster.text = "\n".join(lines)
 	if _closing:
-		_status.text = "Gastwelt wird geschlossen …"
-		_hint.text = "Warte, bis das Hauptmenü wieder bereit ist."
+		_status.text = tr_text("Gastwelt wird geschlossen …")
+		_hint.text = tr_text("Warte, bis das Hauptmenü wieder bereit ist.")
+	set_shared_summary(_summary)
+
+func tr_text(key: String) -> String:
+	return _locale.text(key) if _locale!=null else key
+
+func set_language(value: String, persist: bool=false) -> void:
+	if _locale==null or not _locale.set_language(value): return
+	if persist: _locale.save_preferences()
+	_language_selector.select(0 if value=="de" else 1)
+	_translate_controls(self)
+	_refresh_error()
+	_refresh_notice()
+	_refresh()
+	language_changed.emit()
+
+func _translate_controls(node: Node) -> void:
+	if node.has_meta("ftn_text"): node.set("text",tr_text(str(node.get_meta("ftn_text"))))
+	for child in node.get_children(): _translate_controls(child)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F2:
@@ -260,14 +340,16 @@ func _process(_delta: float) -> void:
 
 func _label(parent: Node, text: String) -> Label:
 	var label := Label.new()
-	label.text = text
+	label.text = tr_text(text)
+	label.set_meta("ftn_text",text)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	parent.add_child(label)
 	return label
 
 func _button(parent: Node, text: String, callback: Callable) -> Button:
 	var button := Button.new()
-	button.text = text
+	button.text = tr_text(text)
+	button.set_meta("ftn_text",text)
 	button.custom_minimum_size.y = 38
 	button.pressed.connect(callback)
 	parent.add_child(button)

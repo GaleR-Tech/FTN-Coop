@@ -7,3 +7,23 @@ dist/
 backups/
 *.log
 *.uid
+# Local reports and planning notes; only the public playtest checklists belong in Git.
+docs/*
+!docs/playtest-checklist.md
+!docs/playtest-checklist.en.md
+# Editor state, secrets, original game files and release binaries stay local.
+.vs/
+.vscode/
+.env
+.env.*
+!.env.example
+*.user
+*.suo
+*.exe
+*.dll
+*.pck
+*.zip
+*.bak
+*.tmp
+*.pem
+*.key

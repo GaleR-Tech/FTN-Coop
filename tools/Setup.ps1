@@ -1,9 +1,12 @@
 param(
     [ValidateSet('Install','Remove')][string]$Action = 'Install',
     [string]$GameDir = '',
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [ValidateSet('auto','de','en')][string]$Language = 'auto'
 )
 $ErrorActionPreference = 'Stop'
+if ($Language -eq 'auto') { $Language = if ([Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -eq 'de') { 'de' } else { 'en' } }
+function Ftn-Text([string]$German, [string]$English) { if ($Language -eq 'de') { $German } else { $English } }
 try {
     if (-not $GameDir) {
         $steamRoots = @()
@@ -33,16 +36,16 @@ try {
         }
     }
     if (-not $GameDir) {
-        if ($NonInteractive) { throw 'Demo-Ordner nicht automatisch gefunden.' }
-        Write-Host 'In Steam: Demo > Eigenschaften > Installierte Dateien > Durchsuchen.'
-        $GameDir = (Read-Host 'Den vollstaendigen Demo-Ordner hier einfuegen').Trim().Trim('"')
+        if ($NonInteractive) { throw (Ftn-Text 'Demo-Ordner nicht automatisch gefunden.' 'The demo folder could not be found automatically.') }
+        Write-Host (Ftn-Text 'In Steam: Demo > Eigenschaften > Installierte Dateien > Durchsuchen.' 'In Steam: Demo > Properties > Installed Files > Browse.')
+        $GameDir = (Read-Host (Ftn-Text 'Den vollstaendigen Demo-Ordner hier einfuegen' 'Paste the full demo folder path here')).Trim().Trim('"')
     }
     $scriptName = if ($Action -eq 'Install') { 'Install.ps1' } else { 'Uninstall.ps1' }
-    & (Join-Path $PSScriptRoot $scriptName) -GameDir $GameDir
+    & (Join-Path $PSScriptRoot $scriptName) -GameDir $GameDir -Language $Language
     exit 0
 }
 catch {
-    Write-Host ('Fehler: '+$_.Exception.Message) -ForegroundColor Red
-    Write-Host 'Das Spiel muss geschlossen sein. Details stehen in README.md.'
+    Write-Host ((Ftn-Text 'Fehler: ' 'Error: ')+$_.Exception.Message) -ForegroundColor Red
+    Write-Host (Ftn-Text 'Das Spiel muss geschlossen sein. Details stehen in README.de.md.' 'The game must be closed. See README.en.md for details.')
     exit 1
 }

@@ -1,0 +1,73 @@
+FTN-Coop – Terms of Use
+Source Available / private use; not an open-source license
+Version 1.0 dated 19 October 2026
+
+This English translation is provided for convenience. The German LICENSE is
+authoritative. In case of discrepancies, the German text takes precedence.
+
+Copyright (c) 2026 GaleR-Tech. All rights reserved insofar as such rights
+exist. The contact is the GitHub account holder GaleR-Tech:
+https://github.com/GaleR-Tech
+
+1. Scope
+
+These terms apply to the original FTN-Coop source files, installers, scripts,
+tests and documentation of this version (collectively, the “Mod”). No rights
+to third-party components are granted.
+
+2. Permitted Use
+
+You may install and run the unmodified Mod free of charge for your own private,
+non-commercial play of Find The Needle Demo. Each player must have a lawfully
+obtained game installation. You may read and inspect the source code, download
+the official files for that purpose, and build the unmodified Mod yourself for
+this use. Copies required for these purposes and your own backup copies are
+permitted.
+
+Changing the intended settings, creating save files, and file changes
+automatically made by the unmodified installer or game are also permitted.
+Official updates and removal of the Mod remain permitted.
+
+To the extent that GitHub's terms of service provide for this in relation to
+publicly available content, the rights granted there, particularly viewing
+and forking within GitHub, are expressly reserved. These terms do not restrict
+those platform rights and do not grant any general permission for reuse or
+modification beyond them.
+
+3. Further Use Requires Permission
+
+Unless permitted by Section 2 or mandatory law, you require the rights holder's
+prior written permission, particularly for:
+
+- modifying the Mod's source code or creating derivative versions;
+- incorporating the code or parts of it into other projects;
+- publishing or distributing the Mod, its code or modified versions outside
+  the expressly reserved GitHub platform rights;
+- selling, sublicensing or any other commercial use.
+
+For downloads, please link to the official project instead of creating your
+own download offerings. Copyright and license notices must be retained in
+permitted copies. No further rights are granted.
+
+4. Statutory Rights and Third-Party Rights
+
+Mandatory statutory permissions and rights remain unaffected. These include
+the applicable mandatory provisions for computer programs, including the cases
+covered by Section 69g(2) of the German Copyright Act (§ 69g Absatz 2 UrhG).
+No provision is intended to prohibit an act that mandatory law permits.
+
+Find The Needle, the demo, their content and the platforms used belong to
+their respective rights holders; see THIRD_PARTY_NOTICES.txt. These terms
+grant no rights to their programs or content.
+
+5. Development Status
+
+The Mod is an unfinished test version. No guarantee is given of error-free
+operation, compatibility with other game versions or functionality over the
+Internet. Statutory claims and mandatory liability rules remain unaffected.
+
+6. Earlier Versions
+
+These terms apply to this provided version. Rights already validly granted
+for lawfully obtained earlier versions are not retroactively revoked by
+these terms.

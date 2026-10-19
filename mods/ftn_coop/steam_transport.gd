@@ -8,7 +8,7 @@ signal message_received(peer_id: int, channel: int, bytes: PackedByteArray)
 signal invite_received(lobby_id: int)
 
 var build := "25963876"
-var mod_version := "0.1.1"
+var mod_version := "0.1.2"
 var lobby_id := 0
 var _steam: Object
 var _peer: MultiplayerPeer
@@ -20,6 +20,7 @@ var _waiting := 0.0
 var _hosting := false
 var _wired := false
 var _connecting_time := 0.0
+var _version_mismatch: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -32,6 +33,7 @@ func local_name() -> String:
 	return String(_steam.call("getPersonaName")).replace("\n"," ").replace("\r"," ").left(32)
 
 func host(limit: int) -> Dictionary:
+	_version_mismatch.clear()
 	var setup := _setup()
 	if not setup.ok:
 		return setup
@@ -46,6 +48,7 @@ func host(limit: int) -> Dictionary:
 	return _ok(null)
 
 func join(target_lobby: int) -> Dictionary:
+	_version_mismatch.clear()
 	var setup := _setup()
 	if not setup.ok:
 		return setup
@@ -168,8 +171,17 @@ func _on_lobby_joined(joined_lobby: int, _permissions: int, _locked: bool, respo
 		_fail("SESSION_FULL" if response==4 else "LOBBY_JOIN_FAILED")
 		return
 	lobby_id = joined_lobby
-	if str(_steam.call("getLobbyData", lobby_id, "ftn_coop_protocol")) != "1" or str(_steam.call("getLobbyData", lobby_id, "ftn_coop_build")) != build or str(_steam.call("getLobbyData", lobby_id, "ftn_coop_mod")) != mod_version:
-		_fail("LOBBY_VERSION_MISMATCH")
+	if str(_steam.call("getLobbyData", lobby_id, "ftn_coop_protocol")) != "1":
+		_fail("PROTOCOL_MISMATCH")
+		return
+	if str(_steam.call("getLobbyData", lobby_id, "ftn_coop_build")) != build:
+		_fail("BUILD_MISMATCH")
+		return
+	var lobby_mod: Variant = _steam.call("getLobbyData", lobby_id, "ftn_coop_mod")
+	if lobby_mod != mod_version:
+		var version: Script = load(get_script().resource_path.get_base_dir()+"/mod_version.gd")
+		_version_mismatch = {"required":version.safe_version(lobby_mod)}
+		_fail("MOD_MISMATCH")
 		return
 	var owner := int(_steam.call("getLobbyOwner", lobby_id))
 	_peer = ClassDB.instantiate("SteamMultiplayerPeer") as MultiplayerPeer
@@ -177,6 +189,9 @@ func _on_lobby_joined(joined_lobby: int, _permissions: int, _locked: bool, respo
 		_fail("CLIENT_CREATE_FAILED")
 		return
 	_wire_peer()
+
+func version_mismatch_details() -> Dictionary:
+	return _version_mismatch.duplicate()
 
 func _wire_peer() -> void:
 	_peer.peer_connected.connect(_on_peer_connected)

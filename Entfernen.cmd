@@ -1,4 +1,4 @@
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Setup.ps1" -Action Remove
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\Setup.ps1" -Action Remove -Language de
 if errorlevel 1 (echo Entfernen fehlgeschlagen.) else (echo FTN-Koop entfernt.)
 pause

@@ -1,9 +1,13 @@
+param([string]$SetupPath = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $builder = Join-Path $projectRoot 'tools\BuildInstaller.ps1'
 if (-not (Test-Path -LiteralPath $builder)) { throw 'EXE installer builder is missing.' }
-& $builder
-$setup = Join-Path $projectRoot 'dist\FTN-Coop-0.1.1-Setup.exe'
+if ($SetupPath) { $setup = $SetupPath }
+else {
+    & $builder
+    $setup = Join-Path $projectRoot 'dist\FTN-Coop-0.1.2-Setup.exe'
+}
 if (-not (Test-Path -LiteralPath $setup)) { throw 'Single-file EXE installer was not built.' }
 function Require([bool]$condition,[string]$message) { if (-not $condition) { throw $message } }
 function Run-Setup([string]$action,[string]$game) {
@@ -43,17 +47,20 @@ Add-Content -LiteralPath $edited -Value '# user changed this'
 Require ((Run-Setup '--install' $game) -ne 0) 'EXE overwrote a locally edited mod file.'
 Require ((Run-Setup '--remove' $game) -eq 0) 'EXE removal with local edits failed.'
 Require (Test-Path -LiteralPath $edited) 'EXE removal deleted a locally edited mod file.'
-$preview = Join-Path $projectRoot 'verification\installer-preview.png'
-Require ((Run-Setup '--render-preview' $preview) -eq 0) 'Installer preview failed to render.'
-Require (Test-Path -LiteralPath $preview) 'Installer window preview is missing.'
 Add-Type -AssemblyName System.Drawing
-$picture = [Drawing.Bitmap]::new($preview)
-try {
-    $colors = [Collections.Generic.HashSet[int]]::new()
-    for ($x=35; $x -lt $picture.Width-35; $x+=8) {
-        for ($y=45; $y -lt $picture.Height-35; $y+=8) { $null=$colors.Add($picture.GetPixel($x,$y).ToArgb()) }
+foreach ($language in @('', '-de', '-en')) {
+    $preview = Join-Path $projectRoot ('verification\installer-preview'+$language+'.png')
+    Require ((Run-Setup ('--render-preview'+$language) $preview) -eq 0) ('Installer preview failed to render: '+$language)
+    Require (Test-Path -LiteralPath $preview) ('Installer window preview is missing: '+$language)
+    $picture = [Drawing.Bitmap]::new($preview)
+    try {
+        $colors = [Collections.Generic.HashSet[int]]::new()
+        for ($x=35; $x -lt $picture.Width-35; $x+=8) {
+            for ($y=45; $y -lt $picture.Height-35; $y+=8) { $null=$colors.Add($picture.GetPixel($x,$y).ToArgb()) }
+        }
+        Require ($colors.Count -gt 8) ('Installer preview is blank instead of showing its actual controls: '+$language)
     }
-    Require ($colors.Count -gt 8) 'Installer preview is blank instead of showing its actual controls.'
+    finally { $picture.Dispose() }
 }
-finally { $picture.Dispose() }
+Require ((Get-FileHash -LiteralPath (Join-Path $projectRoot 'verification\installer-preview-de.png')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $projectRoot 'verification\installer-preview-en.png')).Hash) 'German and English preview switches rendered the same language.'
 Write-Output 'PASS standalone_exe_install_update_remove_and_preview'

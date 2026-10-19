@@ -59,5 +59,22 @@ $game = New-TestGame 'windows-powershell'
 Require ($LASTEXITCODE -eq 0) 'Bundled Windows PowerShell could not install the package.'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $uninstall -GameDir $game
 Require ($LASTEXITCODE -eq 0) 'Bundled Windows PowerShell could not remove the package.'
-Write-Output 'PASS installation_preserves_config_and_other_mods (5 scenarios)'
+$game = New-TestGame 'old-manifest-new-file-collision'
+& $install -GameDir $game | Out-Null
+$manifestPath = Join-Path $game 'mods\ftn_coop\install-state.json'
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$manifest.files = @($manifest.files | Where-Object { $_.path -ne 'locale.gd' })
+[IO.File]::WriteAllText($manifestPath,($manifest | ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
+$collisionPath = Join-Path $game 'mods\ftn_coop\locale.gd'
+[IO.File]::WriteAllText($collisionPath,'# local file predating the update',[Text.UTF8Encoding]::new($false))
+$manifestHash = (Get-FileHash -LiteralPath $manifestPath).Hash
+$configHash = (Get-FileHash -LiteralPath (Join-Path $game 'override.cfg')).Hash
+$refused = $false
+try { & $install -GameDir $game | Out-Null }
+catch { $refused = $_.Exception.Message.Contains('LOCAL_MOD_CHANGED') }
+Require $refused 'An update must refuse an incoming file that collides with an unowned local file.'
+Require ([IO.File]::ReadAllText($collisionPath) -eq '# local file predating the update') 'Unowned local file was overwritten.'
+Require ((Get-FileHash -LiteralPath $manifestPath).Hash -eq $manifestHash) 'Refused update changed the installation manifest.'
+Require ((Get-FileHash -LiteralPath (Join-Path $game 'override.cfg')).Hash -eq $configHash) 'Refused update changed config.'
+Write-Output 'PASS installation_preserves_config_and_other_mods (6 scenarios)'
 exit 0

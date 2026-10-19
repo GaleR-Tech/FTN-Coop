@@ -4,11 +4,11 @@ $builder = Join-Path $projectRoot 'tools\Package.ps1'
 if (-not (Test-Path -LiteralPath $builder)) { throw 'Package builder is missing.' }
 & $builder
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$archivePath = Join-Path $projectRoot 'dist\FTN-Coop-0.1.1.zip'
+$archivePath = Join-Path $projectRoot 'dist\FTN-Coop-0.1.2.zip'
 $archive = [IO.Compression.ZipFile]::OpenRead($archivePath)
 try {
     $names = @($archive.Entries | ForEach-Object { $_.FullName.Replace('\','/') })
-    $expected = @('Installieren.cmd','Entfernen.cmd','README.md','THIRD_PARTY_NOTICES.txt','LICENSE','tools/Install.ps1','tools/Uninstall.ps1','tools/Setup.ps1','docs/playtest-checklist.md')
+    $expected = @('Install.cmd','Remove.cmd','Installieren.cmd','Entfernen.cmd','README.md','README.en.md','README.de.md','THIRD_PARTY_NOTICES.txt','LICENSE','LICENSE.en.txt','tools/Install.ps1','tools/Uninstall.ps1','tools/Setup.ps1','docs/playtest-checklist.md','docs/playtest-checklist.en.md')
     $expected += @(Get-ChildItem (Join-Path $projectRoot 'mods\ftn_coop') -Filter '*.gd' -File | ForEach-Object { 'mods/ftn_coop/'+$_.Name })
     if (@(Compare-Object ($expected | Sort-Object) ($names | Sort-Object)).Count -ne 0) { throw 'Archive contains missing or unapproved files.' }
     foreach ($entry in $archive.Entries) {
@@ -21,8 +21,8 @@ try {
         if ($actual -ne (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash) { throw ('Archive differs from source: '+$entry.FullName) }
     }
     $readme = Get-Content (Join-Path $projectRoot 'README.md') -Raw
-    if ($readme -notmatch '0\.1\.1' -or $readme -notmatch '25963876' -or $readme -notmatch 'unbestätigt') { throw 'Version, build and Internet-test limitation must be documented.' }
-    if ((Get-Content (Join-Path $projectRoot 'mods\ftn_coop/bootstrap.gd') -Raw) -notmatch 'const VERSION := "0\.1\.1"') { throw 'Documented version differs from runtime.' }
+    if ($readme -notmatch '0\.1\.2' -or $readme -notmatch '25963876' -or $readme -notmatch 'unbestätigt') { throw 'Version, build and Internet-test limitation must be documented.' }
+    if ((Get-Content (Join-Path $projectRoot 'mods\ftn_coop/bootstrap.gd') -Raw) -notmatch 'const VERSION := "0\.1\.2"') { throw 'Documented version differs from runtime.' }
 }
 finally { $archive.Dispose() }
 $extractRoot = Join-Path ([IO.Path]::GetTempPath()) ('ftn-coop-package-'+[guid]::NewGuid().ToString('N'))

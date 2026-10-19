@@ -1,6 +1,6 @@
 extends Node
 
-const VERSION := "0.1.1"
+const VERSION := "0.1.2"
 const REQUIRED_CAPABILITIES := [
 	"snapshot_capture", "snapshot_restore", "action_capture", "host_apply",
 	"guest_mutation_guard", "machine_host_only", "player_pose", "isolated_guest_session", "host_save",
@@ -14,9 +14,12 @@ var _last_built := false
 var _integration_started := false
 var _network_test := false
 var _coop_runtime: Node
+var _locale: RefCounted
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_locale = load(get_script().resource_path.get_base_dir()+"/locale.gd").new()
+	_locale.load_preferences()
 	print("[FTN-Coop] own bootstrap loaded; version=" + VERSION)
 	_network_test = OS.get_cmdline_user_args().has("--ftn-coop-native-network-test")
 	if _network_test:
@@ -169,7 +172,7 @@ func _refresh_report() -> void:
 	report_file.close()
 	print("[FTN-Coop] runtime report written; nodes=" + str(report.get("value", {}).get("nodes", []).size()))
 	if is_instance_valid(_status):
-		_status.text = "FTN Koop · eigener Entwicklungsstand " + VERSION + "\nStartkomponente geladen.\nTechnische Anbindung wird geprüft.\nKoop ist noch nicht freigeschaltet."
+		_status.text = _locale.text("FTN Koop · eigener Entwicklungsstand %s\nStartkomponente geladen.\nTechnische Anbindung wird geprüft.\nKoop ist noch nicht freigeschaltet.") % VERSION
 	if is_instance_valid(_coop_runtime): _coop_runtime.refresh_world()
 
 func _create_coop_runtime() -> void:
@@ -194,7 +197,7 @@ func _create_diagnostic_panel() -> void:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(panel)
 	_status = Label.new()
-	_status.text = "FTN Koop · Startkomponente geladen\nDiagnose läuft …"
+	_status.text = _locale.text("FTN Koop · Startkomponente geladen\nDiagnose läuft …")
 	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_status.add_theme_constant_override("outline_size", 1)
 	panel.add_child(_status)

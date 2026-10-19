@@ -1,5 +1,6 @@
-param([Parameter(Mandatory)][string]$GameDir)
+param([Parameter(Mandatory)][string]$GameDir, [ValidateSet('auto','de','en')][string]$Language = 'auto')
 $ErrorActionPreference = 'Stop'
+if ($Language -eq 'auto') { $Language = if ([Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -eq 'de') { 'de' } else { 'en' } }
 $gameRoot = (Resolve-Path -LiteralPath $GameDir).Path.TrimEnd('\')
 $gameExe = Join-Path $gameRoot 'FindTheNeedle.exe'
 if (-not (Test-Path -LiteralPath $gameExe) -or -not (Test-Path -LiteralPath (Join-Path $gameRoot 'FindTheNeedle.pck'))) {
@@ -50,6 +51,15 @@ if (-not $existingEntry.Success) {
 }
 $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.gd')
 if ($sourceFiles.Count -eq 0) { throw 'PACKAGE_EMPTY' }
+# New version files may collide with local files absent from the old manifest.
+# Complete this preflight before writing config, files or rollback information.
+$ownedNames = @{}
+if ($null -ne $manifest) { foreach ($entry in $manifest.files) { $ownedNames[$entry.path] = $true } }
+foreach ($sourceFile in $sourceFiles) {
+    if ((Test-Path -LiteralPath (Join-Path $modRoot $sourceFile.Name)) -and -not $ownedNames.ContainsKey($sourceFile.Name)) {
+        throw 'LOCAL_MOD_CHANGED: An incoming file would overwrite an unmanaged local file.'
+    }
+}
 if ($null -eq $manifest) {
     $manifest = [pscustomobject]@{
         format = 'FTN-Coop-1'
@@ -74,4 +84,5 @@ New-Item -ItemType Directory -Path $modRoot -Force | Out-Null
 [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
 foreach ($sourceFile in $sourceFiles) { Copy-Item -LiteralPath $sourceFile.FullName -Destination (Join-Path $modRoot $sourceFile.Name) -Force }
 [System.IO.File]::WriteAllBytes($configPath, $installedBytes)
-Write-Output 'FTN-Koop installiert. Spiel normal ueber Steam starten und F2 druecken.'
+if ($Language -eq 'de') { Write-Output 'FTN-Koop installiert. Spiel normal ueber Steam starten und F2 druecken.' }
+else { Write-Output 'FTN-Coop installed. Launch the game through Steam and press F2.' }

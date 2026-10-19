@@ -91,7 +91,7 @@ func accept_hello(peer_id: int, hello: Dictionary) -> Dictionary:
 	roster[peer_id] = {"id": peer_id, "name": name_value.strip_edges(), "state": "syncing", "accepted": true}
 	_pending.erase(peer_id)
 	roster_changed.emit()
-	outgoing.emit(peer_id, "WELCOME", {"session_id": session_id, "player_id": peer_id, "roster": roster.values()})
+	outgoing.emit(peer_id, "WELCOME", {"session_id": session_id, "player_id": peer_id, "roster": roster.values(), "mod_version":_mod_version})
 	return _ok(roster[peer_id].duplicate())
 
 func mark_world_ready(peer_id: int) -> Dictionary:
@@ -106,6 +106,8 @@ func mark_world_ready(peer_id: int) -> Dictionary:
 func accept_welcome(sender: int, body: Dictionary) -> Dictionary:
 	if is_host or sender != 1 or (state != State.SYNCING and state != State.PLAYING):
 		return _error("WELCOME_INVALID")
+	if body.get("mod_version")!=_mod_version:
+		return _error("MOD_MISMATCH")
 	var identity: Variant = body.get("session_id")
 	if not identity is String or identity.length() != 32 or not identity.is_valid_hex_number():
 		return _error("SESSION_INVALID")

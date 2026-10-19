@@ -30,6 +30,8 @@ var _leaving := false
 var _resync_pending := false
 var _resync_attempts := 0
 var _world_retries: Dictionary = {}
+var version_mismatch: Dictionary = {}
+var _mod_version := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -37,6 +39,7 @@ func _ready() -> void:
 func configure(transport: Node, adapter: RefCounted, build: String, version: String) -> void:
 	_transport = transport
 	_adapter = adapter
+	_mod_version = version
 	var base: String = get_script().resource_path.get_base_dir()
 	_protocol = load(base+"/protocol.gd").new()
 	session = load(base+"/session.gd").new()
@@ -57,7 +60,7 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 	_receiver.progress_changed.connect(_on_transfer_progress)
 	transport.message_received.connect(_on_message)
 	transport.disconnected.connect(_on_disconnected)
-	transport.failed.connect(func(code: String): _fail(code))
+	transport.failed.connect(_on_transport_failed)
 
 func host() -> Dictionary:
 	leave()
@@ -82,6 +85,7 @@ func leave() -> void:
 	_connections.clear()
 	_peer_epochs.clear()
 	_world_retries.clear()
+	version_mismatch.clear()
 	connection_id = ""
 	_loading = false
 	_baseline_received = false
@@ -171,7 +175,9 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 		if message.type=="HELLO":
 			var accepted: Dictionary = session.accept_hello(peer,body)
 			if not accepted.ok:
-				_queue(peer,"REJECT",{"code":accepted.code})
+				var rejection := {"code":accepted.code}
+				if accepted.code=="MOD_MISMATCH": rejection.required_mod_version = _mod_version
+				_queue(peer,"REJECT",rejection)
 				# Deliver rejection before disconnecting on the next frame.
 				return
 			if not _pending.has(peer) and not _preparing.has(peer) and session.roster[peer].state!="playing": _start_world(peer)
@@ -216,12 +222,17 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 	if peer!=1: return
 	if message.type=="REJECT":
 		if not session.session_id.is_empty() and message.session!=session.session_id: return
+		if body.get("code")=="MOD_MISMATCH": _set_version_mismatch(body.get("required_mod_version"))
 		_fail(body.get("code","JOIN_REFUSED"))
 		return
 	if message.type=="WELCOME":
 		if message.session!=body.get("session_id") or not _protocol.valid_id(body.get("_connection")): return
 		var welcomed: Dictionary = session.accept_welcome(peer,body)
-		if not welcomed.ok: return
+		if not welcomed.ok:
+			if welcomed.code=="MOD_MISMATCH":
+				_set_version_mismatch(body.get("mod_version"))
+				_fail(welcomed.code)
+			return
 		connection_id = body._connection
 		_receiver.configure(session.session_id)
 		return
@@ -236,7 +247,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 			if body.get("stage")=="caught_up" and body.get("revision")==world_sync.revision:
 				_resync_attempts = 0
 				session.mark_world_ready(_transport.local_peer_id())
-		"ROSTER": session.accept_welcome(1,{"session_id":session.session_id,"player_id":_transport.local_peer_id(),"roster":body.get("roster")})
+		"ROSTER": session.accept_welcome(1,{"session_id":session.session_id,"player_id":_transport.local_peer_id(),"roster":body.get("roster"),"mod_version":_mod_version})
 		"POSE":
 			if typeof(body.get("peer"))==TYPE_INT and body.get("pose") is Dictionary and session.roster.has(body.peer): pose_received.emit(body.peer,body.pose)
 		"ACTION_RESULT":
@@ -388,6 +399,16 @@ func _fail(code: String, peer: int=0) -> void:
 	problem.emit(code)
 	if session.is_host and peer>1: _transport.reject_peer(peer)
 	else: leave()
+
+func _set_version_mismatch(required: Variant) -> void:
+	var version: Script = load(get_script().resource_path.get_base_dir()+"/mod_version.gd")
+	version_mismatch = {"required":version.safe_version(required)}
+
+func _on_transport_failed(code: String) -> void:
+	if code=="MOD_MISMATCH" and _transport.has_method("version_mismatch_details"):
+		var details: Dictionary = _transport.version_mismatch_details()
+		_set_version_mismatch(details.get("required"))
+	_fail(code)
 
 func _ok() -> Dictionary: return {"ok":true,"code":"OK","value":null}
 func _error(code: String) -> Dictionary: return {"ok":false,"code":code,"value":null}

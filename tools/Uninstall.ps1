@@ -1,5 +1,6 @@
-param([Parameter(Mandatory)][string]$GameDir)
+param([Parameter(Mandatory)][string]$GameDir, [ValidateSet('auto','de','en')][string]$Language = 'auto')
 $ErrorActionPreference = 'Stop'
+if ($Language -eq 'auto') { $Language = if ([Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -eq 'de') { 'de' } else { 'en' } }
 $gameRoot = (Resolve-Path -LiteralPath $GameDir).Path.TrimEnd('\')
 $gameExe = Join-Path $gameRoot 'FindTheNeedle.exe'
 if (-not (Test-Path -LiteralPath $gameExe) -or -not (Test-Path -LiteralPath (Join-Path $gameRoot 'FindTheNeedle.pck'))) { throw 'GAME_FOLDER_INVALID' }
@@ -38,7 +39,8 @@ foreach ($entry in $manifest.files) {
         Remove-Item -LiteralPath $file -Force
     } else {
         $retained = $true
-        Write-Output ('Preserved locally changed own file: ' + $entry.path)
+        $message = if ($Language -eq 'de') { 'Lokal geaenderte eigene Datei beibehalten: ' } else { 'Preserved locally changed own file: ' }
+        Write-Output ('LOCAL_MOD_PRESERVED: '+$message+$entry.path)
     }
 }
 if (-not $retained) {
@@ -49,4 +51,5 @@ if (-not $retained) {
         Remove-Item -LiteralPath $modsRoot
     }
 }
-Write-Output 'Own FTN-Coop autoload removed; unrelated mods and settings preserved.'
+if ($Language -eq 'de') { Write-Output 'Eigener FTN-Koop-Start entfernt; andere Mods und Einstellungen beibehalten.' }
+else { Write-Output 'Own FTN-Coop autoload removed; unrelated mods and settings preserved.' }

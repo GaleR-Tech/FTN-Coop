@@ -14,13 +14,13 @@ func run(_tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []
 	var transport: Node = load("res://tests/fixtures/fake_transport.gd").new()
 	var session: Node = load("res://mods/ftn_coop/session.gd").new()
-	session.configure(transport, "25963876", "0.1.1")
+	session.configure(transport, "25963876", "0.1.2")
 	if not session.host().ok or session.state != session.State.CREATING:
 		errors.append("Hosting must wait for the asynchronous lobby callback.")
 	transport.hosted.emit(42)
 	if session.state != session.State.LOBBY or session.roster.size() != 1:
 		errors.append("A created lobby must register its host.")
-	var hello := {"protocol": 1, "build": "25963876", "mod_version": "0.1.1", "name": "Friend"}
+	var hello := {"protocol": 1, "build": "25963876", "mod_version": "0.1.2", "name": "Friend"}
 	for peer_id in [2, 3, 4]:
 		transport.connected.emit(peer_id)
 		if not session.accept_hello(peer_id, hello).ok:
@@ -71,12 +71,19 @@ func run(_tree: SceneTree) -> Array[String]:
 	if not session.has_method("accept_welcome"):
 		errors.append("Validated client welcome handling is not implemented yet.")
 	else:
-		var welcome := {"session_id": "0123456789abcdef0123456789abcdef", "player_id": 2, "roster": [
+		var welcome := {"session_id": "0123456789abcdef0123456789abcdef", "player_id": 2, "mod_version":"0.1.2", "roster": [
 			{"id": 1, "name": "Host", "state": "playing", "accepted": true},
 			{"id": 2, "name": "Friend", "state": "syncing", "accepted": true},
 		]}
 		if session.accept_welcome(3, welcome).ok:
 			errors.append("Only the host may assign the client roster.")
+		var wrong_welcome := welcome.duplicate(true)
+		wrong_welcome.mod_version = "0.1.1"
+		if session.accept_welcome(1,wrong_welcome).code!="MOD_MISMATCH" or not session.session_id.is_empty():
+			errors.append("A mismatched host version must be rejected before accepting its session or roster.")
+		wrong_welcome.erase("mod_version")
+		if session.accept_welcome(1,wrong_welcome).code!="MOD_MISMATCH":
+			errors.append("A host without version information must fail closed.")
 		if not session.accept_welcome(1, welcome).ok or session.state != session.State.SYNCING:
 			errors.append("A valid welcome must still wait for world completion.")
 		session.mark_world_ready(2)
