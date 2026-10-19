@@ -14,6 +14,7 @@
   Mismatches show the installed and required versions, plus a mod-download button.
   Incompatible guests cannot load the world; the host session stays running.
 - Updates preserve untracked local files when a new mod file uses the same name.
+- Move the F2 badge to the bottom right to keep the game's money display clear.
 
 Test release. Only Find The Needle Demo V66 / build 25963876 remains supported.
 Internet play with different Steam accounts remains unverified.
@@ -30,6 +31,7 @@ Internet play with different Steam accounts remains unverified.
   Bei Abweichungen erscheinen installierte und benötigte Version sowie ein
   Download-Button. Inkompatible Gäste laden keine Welt; die Host-Sitzung bleibt aktiv.
 - Updates schützen unverwaltete lokale Dateien bei Namenskonflikten mit neuen Mod-Dateien.
+- F2-Hinweis nach unten rechts verschoben, damit die Geldanzeige des Spiels frei bleibt.
 
 Testversion. Unterstützt weiterhin ausschließlich Find The Needle Demo V66 /
 Build 25963876. Der Internettest mit verschiedenen Steam-Konten steht weiterhin aus.

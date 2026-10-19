@@ -334,8 +334,8 @@ func _process(_delta: float) -> void:
 	var viewport := get_viewport().get_visible_rect().size
 	var width := minf(390,viewport.x-24)
 	_panel.position = Vector2(viewport.x-width-12,52)
-	_panel.size = Vector2(width,maxf(120,minf(640,viewport.y-64)))
-	_badge.position = Vector2(viewport.x-222,10)
+	_panel.size = Vector2(width,maxf(120,minf(640,viewport.y-112)))
+	_badge.position = Vector2(maxf(12,viewport.x-222),maxf(12,viewport.y-44))
 	_badge.size = Vector2(210,32)
 
 func _label(parent: Node, text: String) -> Label:
