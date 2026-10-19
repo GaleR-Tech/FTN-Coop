@@ -19,8 +19,8 @@ func run(tree: SceneTree) -> Array[String]:
 	var host: Node = module.new()
 	var guest: Node = module.new()
 	for node in [host_wire,guest_wire,host,guest]: tree.root.add_child(node)
-	host.configure(host_wire,host_game,"25963876","0.1.2")
-	guest.configure(guest_wire,guest_game,"25963876","0.1.2")
+	host.configure(host_wire,host_game,"25963876","0.1.3")
+	guest.configure(guest_wire,guest_game,"25963876","0.1.3")
 	var stages: Array[String] = []
 	if guest.has_signal("load_progress"):
 		guest.load_progress.connect(func(stage: String, _received: int, _total: int): stages.append(stage))
@@ -97,7 +97,7 @@ func _four_socket_peers(tree: SceneTree) -> Array[String]:
 		var controller: Node = module.new()
 		tree.root.add_child(wire)
 		tree.root.add_child(controller)
-		controller.configure(wire,game,"25963876","0.1.2")
+		controller.configure(wire,game,"25963876","0.1.3")
 		wires.append(wire)
 		games.append(game)
 		controllers.append(controller)

@@ -1,4 +1,4 @@
-# FTN-Koop · 0.1.2
+# FTN-Koop · 0.1.3
 
 [English](README.en.md) · Deutsch
 
@@ -43,11 +43,13 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 ## Installation
 
-Am einfachsten mit **FTN-Coop-0.1.2-Setup.exe**:
+Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
+
+Am einfachsten mit **FTN-Coop-0.1.3-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
-3. **Installieren / Aktualisieren** anklicken und die Erfolgsmeldung abwarten.
+3. **Installieren** / **Aktualisieren** anklicken und die Erfolgsmeldung abwarten.
 4. Die Demo normal über Steam starten und mit **F2** das Koop-Menü öffnen.
 
 Die einzelne EXE enthält alle Mod-Dateien und benötigt keinen zusätzlichen
@@ -122,7 +124,7 @@ Spiel schließen und in der Setup-EXE **Mod entfernen** wählen oder **Entfernen
 aus dem ZIP ausführen. Eigene veränderte Mod-Dateien
 werden zur Sicherheit behalten; spätere fremde Konfigurationsänderungen bleiben
 erhalten. Spielstände werden nicht gelöscht. Zum Aktualisieren dasselbe Verfahren
-mit **Installieren / Aktualisieren** der neuen EXE oder **Installieren.cmd** des
+mit **Installieren** / **Aktualisieren** der neuen EXE oder **Installieren.cmd** des
 neuen ZIP-Pakets verwenden. Lokal geänderte Mod-Dateien
 müssen vorher gesichert werden, andernfalls verweigert das Update die Überschreibung.
 

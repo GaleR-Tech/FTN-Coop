@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SetupPath) {
     & (Join-Path $projectRoot 'tools\BuildInstaller.ps1')
-    $SetupPath = Join-Path $projectRoot 'dist\FTN-Coop-0.1.2-Setup.exe'
+    $SetupPath = Join-Path $projectRoot 'dist\FTN-Coop-0.1.3-Setup.exe'
 }
 if (-not $Worker) {
     # Isolate Windows Forms and culture changes, and bound unexpected modal dialogs.
@@ -37,7 +37,10 @@ function New-SetupForm([string]$culture) {
     return [Activator]::CreateInstance($formType, $instanceFlags, $null, [object[]]@($true), $null)
 }
 function Require-Caption($form,[string]$caption) {
-    Require (@($form.Controls | Where-Object Text -eq $caption).Count -eq 1) ('Missing translated control: '+$caption)
+    Require (@(Get-FormControls $form | Where-Object Text -eq $caption).Count -eq 1) ('Missing translated control: '+$caption)
+}
+function Get-FormControls($parent) {
+    foreach ($child in $parent.Controls) { Write-Output $child; Get-FormControls $child }
 }
 function Invoke-Install([string]$action,[string]$game,[string]$culture) {
     [Threading.Thread]::CurrentThread.CurrentUICulture = [Globalization.CultureInfo]::GetCultureInfo($culture)
@@ -51,6 +54,8 @@ function Complete-FormOperation($form,$selector,$directory,[string]$action) {
     $operation = $formType.GetMethod('Run',$instanceFlags).Invoke($form,[object[]]@($action))
     Require (-not $selector.Enabled) ('Language changes must be disabled during '+$action+'.')
     Require (-not $directory.Enabled) ('The demo folder must be disabled during '+$action+'.')
+    $progress = @($form.Controls.Find('StageProgress',$true))[0]
+    Require ($progress.Style -eq [Windows.Forms.ProgressBarStyle]::Marquee) 'An active operation must use indeterminate progress.'
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while (-not $operation.IsCompleted -and [DateTime]::UtcNow -lt $deadline) {
         [Windows.Forms.Application]::DoEvents()
@@ -59,6 +64,7 @@ function Complete-FormOperation($form,$selector,$directory,[string]$action) {
     Require $operation.IsCompleted ('The installer form operation timed out: '+$action)
     $null = $operation.GetAwaiter().GetResult()
     Require $selector.Enabled ('The language selector stayed disabled after '+$action+'.')
+    Require ($progress.Value -eq 100) 'Successful completion must finish the progress indicator.'
 }
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('ftn-installer-languages-'+[guid]::NewGuid().ToString('N'))
 $game = Join-Path $testRoot 'Synthetic Demo ä & English'
@@ -67,34 +73,34 @@ foreach ($name in @('FindTheNeedle.exe','FindTheNeedle.pck')) { [IO.File]::Write
 $form = $null
 try {
     $form = New-SetupForm 'en-US'
+    $directory = @(Get-FormControls $form | Where-Object { $_ -is [Windows.Forms.TextBox] })[0]
+    $directory.Text = $game
     Require ($form.Text -eq 'FTN-Coop · Setup') 'Non-German Windows UI culture did not default to English.'
     Require-Caption $form 'Find The Needle · Co-op'
     Require-Caption $form 'Setup for the Steam demo V66 (Build 25963876).'
     Require-Caption $form 'Demo folder'
     Require-Caption $form 'Browse …'
-    Require-Caption $form 'Install / Update'
+    Require-Caption $form 'Install'
     Require-Caption $form 'Remove mod'
-    Require-Caption $form 'Close the demo, then click Install / Update.'
+    Require-Caption $form 'Close the demo, then choose Install.'
     Require-Caption $form 'Language'
-    $selector = @($form.Controls | Where-Object { $_ -is [Windows.Forms.ComboBox] })
+    $selector = @(Get-FormControls $form | Where-Object { $_ -is [Windows.Forms.ComboBox] })
     Require ($selector.Count -eq 1) 'The installer needs one visible language selector.'
     $selector = $selector[0]
     Require ($selector.Items.Count -eq 2 -and $selector.Items[0] -eq 'Deutsch' -and $selector.Items[1] -eq 'English') 'The language choices must be Deutsch and English.'
-    $directory = @($form.Controls | Where-Object { $_ -is [Windows.Forms.TextBox] })[0]
-    $directory.Text = $game
     $selector.SelectedIndex = 0
     Require ($form.Text -eq 'FTN-Koop · Installation') 'Choosing Deutsch did not translate the form title.'
     Require-Caption $form 'Find The Needle · Koop'
     Require-Caption $form 'Installation für die Steam-Demo V66 (Build 25963876).'
     Require-Caption $form 'Demo-Ordner'
     Require-Caption $form 'Ordner …'
-    Require-Caption $form 'Installieren / Aktualisieren'
+    Require-Caption $form 'Installieren'
     Require-Caption $form 'Mod entfernen'
-    Require-Caption $form 'Demo schließen, dann auf Installieren klicken.'
+    Require-Caption $form 'Schließe die Demo, dann klicke auf Installieren.'
     Require-Caption $form 'Sprache'
     Require ($directory.Text -eq $game) 'Changing language lost the chosen demo folder.'
     $selector.SelectedIndex = 1
-    Require-Caption $form 'Install / Update'
+    Require-Caption $form 'Install'
     Require ($directory.Text -eq $game) 'Switching back to English lost the chosen demo folder.'
 
     # Run the real form operation against synthetic game files and its real embedded payload.

@@ -51,6 +51,9 @@ if (-not $existingEntry.Success) {
 }
 $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -File -Filter '*.gd')
 if ($sourceFiles.Count -eq 0) { throw 'PACKAGE_EMPTY' }
+$bootstrapSource = [IO.File]::ReadAllText((Join-Path $sourceRoot 'bootstrap.gd'))
+$packageVersion = [regex]::Match($bootstrapSource,'(?m)^const VERSION := "([0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(?:-[a-z0-9.]{1,16})?)"\r?$')
+if (-not $packageVersion.Success) { throw 'PACKAGE_VERSION_INVALID' }
 # New version files may collide with local files absent from the old manifest.
 # Complete this preflight before writing config, files or rollback information.
 $ownedNames = @{}
@@ -71,6 +74,7 @@ if ($null -eq $manifest) {
     }
 }
 $installedBytes = [System.Text.Encoding]::UTF8.GetBytes($configText)
+$manifest | Add-Member -NotePropertyName mod_version -NotePropertyValue $packageVersion.Groups[1].Value -Force
 $configHasher = [System.Security.Cryptography.SHA256]::Create()
 try {
     # Keep the old baseline when users changed config after installation.

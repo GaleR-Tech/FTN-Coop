@@ -1,5 +1,29 @@
 # Changelog / Änderungen
 
+## 0.1.3 · 2026-10-19
+
+### English
+
+- Redesigned Windows installer with a dark interface, gold accents and GaleR-Tech branding.
+- Installed and package versions appear together. The main action adapts to the selected installation; removing the mod is a smaller, separate action.
+- Clear operation stages and indeterminate progress during installation/removal, followed by the actual result.
+- Removed the Internet-test notice from the installer, as requested. The documented test status is unchanged.
+- New installations record their mod version; the installer also recognizes older installations without this metadata.
+- A GitHub project link opens the source repository directly from the installer.
+
+Only Find The Needle Demo V66 / build 25963876 on Windows is supported. Internet play between different Steam accounts remains unverified.
+
+### Deutsch
+
+- Windows-Installer mit dunkler Oberfläche, goldenen Akzenten und GaleR-Tech-Branding überarbeitet.
+- Installierte und enthaltene Version werden gemeinsam angezeigt. Die Hauptaktion richtet sich nach der ausgewählten Installation; das Entfernen ist eine kleinere, getrennte Aktion.
+- Klare Arbeitsschritte und unbestimmte Fortschrittsanzeige während Installation/Entfernen, danach das tatsächliche Ergebnis.
+- Internettest-Hinweis wie gewünscht aus dem Installer entfernt. Der dokumentierte Teststatus bleibt unverändert.
+- Neue Installationen hinterlegen ihre Mod-Version; der Installer erkennt auch ältere Installationen ohne diese Angabe.
+- Ein GitHub-Projektlink öffnet das Quellcode-Repository direkt aus dem Installer.
+
+Unterstützt wird ausschließlich Find The Needle Demo V66 / Build 25963876 unter Windows. Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
+
 ## 0.1.2 · 2026-10-19
 
 ### English

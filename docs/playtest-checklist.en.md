@@ -2,7 +2,7 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.1.2 · Demo build 25963876 · Updated 19 October 2026.
+Version 0.1.3 · Demo build 25963876 · Updated 19 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
