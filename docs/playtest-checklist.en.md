@@ -2,14 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.2.0 · Demo build 25963876 · Updated 20 October 2026.
+Version 0.3.0 · Demo build 25963876 · Updated 20 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
 - [ ] Both use Windows, the same demo build and the same mod package.
-- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.2.0 and restart, joining can be retried.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.3.0 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -26,6 +26,11 @@ Internet verification below. No one has been contacted or invited automatically.
 
 ## Then, four people
 
+- [ ] F3 markers from every participant appear with the chosen type and matching name/avatar colors; replacement, expiry and departure removal work.
+- [ ] The F2 list shows the actual loading/play state and measured round-trip values; menus/text input do not place markers.
+- [ ] The host saves a gameplay preset, changes values and reapplies it; all guests follow. Restarting retains the preset, deleting it removes it.
+- [ ] After an unexpected guest disconnect, Rejoin last session waits for cleanup and loads the current host world once. Voluntary leaving hides the remembered target.
+- [ ] Update checking starts only when requested, reports the published version, and leaves play available with no Internet connection. It never installs an update automatically.
 - [ ] Guests begin with different personal gameplay settings. After joining, all nine F2 shared values match the host; guest controls are disabled.
 - [ ] The host changes the object limit and cleanup interval in F2; all guests receive the new values without rejoining.
 - [ ] Graphics, audio, language and controls remain personal. After normal leave or host loss, each guest's original gameplay values are restored and personal changes are saved.
@@ -43,4 +48,4 @@ Internet verification below. No one has been contacted or invited automatically.
 Record the date, demo build, mod version, participant count, Internet connections
 and exact steps when an error occurs. Do not copy account credentials or complete
 save files into a public report. Until this checklist has been passed with real
-accounts, the package remains an unverified development version.
+accounts, Internet operation remains unverified even though 0.3.0 uses the normal GitHub release label.

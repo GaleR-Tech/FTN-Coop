@@ -1,13 +1,13 @@
 # FTN-Koop · Internettest noch offen
 
-Version 0.2.0 · Demo-Build 25963876 · Stand 20.10.2026.
+Version 0.3.0 · Demo-Build 25963876 · Stand 20.10.2026.
 Lokale echte Demo-Prozesse sind getrennt vom folgenden Internetnachweis zu bewerten.
 Niemand wurde automatisch angeschrieben oder eingeladen.
 
 ## Zuerst zwei Personen
 
 - [ ] Beide verwenden Windows, denselben Demo-Build und dasselbe Mod-Paket.
-- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.2.0 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
+- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.3.0 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
 - [ ] Beide starten über Steam mit verschiedenen Konten an verschiedenen Rechnern
       und Internetanschlüssen; Steam-Overlay ist verfügbar.
 - [ ] Host lädt einen eigenen Teststand, erstellt eine private Sitzung und lädt ein.
@@ -24,6 +24,11 @@ Niemand wurde automatisch angeschrieben oder eingeladen.
 
 ## Danach vier Personen
 
+- [ ] F3-Markierungen aller Teilnehmer erscheinen mit gewähltem Typ und passenden Namens-/Figurenfarben; Ersetzen, Ablauf und Entfernen beim Verlassen funktionieren.
+- [ ] F2 zeigt tatsächlichen Lade-/Spielstatus und gemessene Antwortzeiten; Menüs und Texteingaben lösen keine Markierungen aus.
+- [ ] Host speichert eine Vorlage, ändert Spielwerte und wendet sie wieder an; alle Gäste folgen. Neustart erhält die Vorlage, Löschen entfernt sie.
+- [ ] Nach unerwartetem Gast-Verbindungsabbruch wartet der Wiederbeitritt auf das Schließen der alten Gastwelt und lädt genau einmal die aktuelle Host-Welt. Bewusstes Verlassen entfernt das Ziel.
+- [ ] Updateprüfung startet nur auf Wunsch, zeigt die veröffentlichte Version und lässt ohne Internet weiter spielen. Sie installiert nichts automatisch.
 - [ ] Gäste beginnen mit unterschiedlichen eigenen Spieleinstellungen. Nach dem Beitritt stimmen alle neun gemeinsamen F2-Werte mit dem Host überein; Gast-Bedienelemente sind gesperrt.
 - [ ] Host ändert Objektgrenze und Aufräumintervall in F2; alle Gäste erhalten die neuen Werte ohne erneuten Beitritt.
 - [ ] Grafik, Ton, Sprache und Steuerung bleiben persönlich. Nach normalem Verlassen oder Host-Verlust werden eigene Spielwerte wiederhergestellt und persönliche Änderungen gespeichert.
@@ -41,4 +46,4 @@ Niemand wurde automatisch angeschrieben oder eingeladen.
 Datum, Demo-Build, Mod-Version, Teilnehmerzahl, Internetanschlüsse und genaue Schritte
 bei einem Fehler festhalten. Keine Kontozugangsdaten oder vollständigen Spielstände
 in einen öffentlichen Bericht kopieren. Bis diese Liste mit echten Konten bestanden
-ist, bleibt das Paket ein unbestätigter Entwicklungsstand.
+ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.3.0 die normale GitHub-Release-Kennzeichnung verwendet.

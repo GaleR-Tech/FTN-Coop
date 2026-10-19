@@ -4,8 +4,8 @@ $frameworkRoot = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $compiler = Join-Path $frameworkRoot 'csc.exe'
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'Windows .NET Framework compiler is missing.' }
 & (Join-Path $PSScriptRoot 'Package.ps1')
-$zip = Join-Path $projectRoot 'dist\FTN-Coop-0.2.0.zip'
-$exe = Join-Path $projectRoot 'dist\FTN-Coop-0.2.0-Setup.exe'
+$zip = Join-Path $projectRoot 'dist\FTN-Coop-0.3.0.zip'
+$exe = Join-Path $projectRoot 'dist\FTN-Coop-0.3.0-Setup.exe'
 $arguments = @('/nologo','/target:winexe','/platform:anycpu','/optimize+',
     ('/out:'+$exe),('/win32manifest:'+(Join-Path $projectRoot 'installer\app.manifest')),
     ('/resource:'+$zip+',FTNCoop.Payload.zip'),
@@ -16,5 +16,5 @@ $arguments = @('/nologo','/target:winexe','/platform:anycpu','/optimize+',
 & $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw 'EXE compilation failed.' }
 $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.File]::WriteAllText($exe+'.sha256',$hash+'  FTN-Coop-0.2.0-Setup.exe'+[Environment]::NewLine)
+[IO.File]::WriteAllText($exe+'.sha256',$hash+'  FTN-Coop-0.3.0-Setup.exe'+[Environment]::NewLine)
 Write-Output ('EXE erstellt: '+$exe)

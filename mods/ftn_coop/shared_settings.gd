@@ -84,6 +84,26 @@ func update_host(key: String, value: Variant) -> Dictionary:
 	_config.call("set_"+key,checked.value[key])
 	return capture()
 
+func update_host_values(values: Variant) -> Dictionary:
+	if not _original.is_empty(): return _error("HOST_ONLY")
+	var checked := validate(values)
+	if not checked.ok: return checked
+	var before := capture()
+	if not before.ok: return before
+	for key in SCHEMA:
+		if not _config.has_method("set_"+key): return _error("CAPABILITY_MISSING")
+	var readonly: bool = _config.get("settings_readonly")
+	_config.set("settings_readonly",true)
+	for key in SCHEMA: _config.call("set_"+key,checked.value[key])
+	var applied := capture()
+	if not applied.ok or applied.value!=checked.value:
+		for key in SCHEMA: _config.set(key,before.value[key])
+		_config.set("settings_readonly",readonly)
+		return _error("SETTINGS_INVALID")
+	_config.set("settings_readonly",readonly)
+	if not readonly: _config.call("save_settings")
+	return applied
+
 func _available() -> bool:
 	if not is_instance_valid(_config) or not _config.has_method("save_settings"): return false
 	var available := {}

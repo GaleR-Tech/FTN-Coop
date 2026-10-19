@@ -13,6 +13,7 @@ var drop_lossy := false
 var invite_calls := 0
 var invite_listening := false
 var join_calls := 0
+var joined_lobbies: Array[int] = []
 var corrupt_baselines := 0
 var corrupted_baselines := 0
 
@@ -29,6 +30,7 @@ func host(_limit: int) -> Dictionary:
 
 func join(_lobby: int) -> Dictionary:
 	join_calls += 1
+	joined_lobbies.append(_lobby)
 	_link.call_deferred()
 	return _ok()
 

@@ -1,4 +1,4 @@
-# FTN-Coop · 0.2.0
+# FTN-Coop · 0.3.0
 
 English · [Deutsch](README.de.md)
 
@@ -47,7 +47,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.2.0-Setup.exe**:
+The easiest option is **FTN-Coop-0.3.0-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -128,6 +128,40 @@ Graphics, audio, language and controls remain personal. Changes to personal opti
 made as a guest are saved when leaving or closing the demo normally; forced
 termination may lose those latest personal changes. Temporary host values are not
 written into the guest's personal settings file.
+
+## Markers, player status and rejoining
+
+New in **0.3.0**: press **F3** during play to mark the surface under your
+crosshair, up to 50 meters away. In F2, choose **Point**, **Build here**,
+**Needle here** or **Help**. Each player has one marker, which lasts 20 seconds;
+placing another replaces it. Markers, player names and avatars use matching
+player colors. F3 does not place markers while a menu, text input or world
+loading is active.
+
+The F2 player list shows loading/synchronization/play status and measured
+round-trip delay in milliseconds. A missing measurement is shown as unavailable;
+the local host is labeled **Host**. Measurements include game processing time.
+
+After an unexpected disconnect, **Rejoin last session** offers a fresh join once
+the old guest world has closed. The host must still have the same session open.
+Voluntary leaving forgets that target, as does closing the demo. Rejoining loads
+the host's current world and does not guarantee your previous position.
+
+## Gameplay presets and update checking
+
+The host can save, apply and delete named presets under F2 → **Shared gameplay
+settings**. Up to 20 presets store only the nine shared gameplay values, locally
+on that computer. Applying a preset updates all guests; personal graphics,
+audio and controls remain individual.
+
+**Check for updates** contacts the public GitHub Releases service only when you
+click it. It offers the project's download page when a newer normal release is
+available. It does not download or install anything. Checks are limited to once
+per minute; an offline/rate-limit error leaves play available. No player name,
+Steam ID, lobby identifier, local path, report or save data is included.
+
+Version 0.3.0 is published as a normal GitHub release. Internet play between
+separate Steam accounts remains unverified.
 
 ## Save and leave
 

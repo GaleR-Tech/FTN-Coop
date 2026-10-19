@@ -5,6 +5,8 @@ signal pose_received(peer_id: int, pose: Dictionary)
 signal stopped
 signal action_result(sequence: int, ok: bool, code: String)
 signal load_progress(stage: String, received_bytes: int, total_bytes: int)
+signal markers_changed(rows: Array)
+signal player_status_changed(rows: Dictionary)
 
 var session: Node
 var world_sync: Node
@@ -33,6 +35,14 @@ var _world_retries: Dictionary = {}
 var version_mismatch: Dictionary = {}
 var _mod_version := ""
 var _sync_wait := 0.0
+var _markers: RefCounted
+var _status: RefCounted
+var _player_status: Dictionary = {}
+var _peer_positions: Dictionary = {}
+var _peer_stages: Dictionary = {}
+var _status_due := 3.0
+var _sent_stage := ""
+var _status_announced_at: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -43,6 +53,8 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 	_mod_version = version
 	var base: String = get_script().resource_path.get_base_dir()
 	_protocol = load(base+"/protocol.gd").new()
+	_markers = load(base+"/marker_state.gd").new()
+	_status = load(base+"/connection_status.gd").new()
 	session = load(base+"/session.gd").new()
 	world_sync = load(base+"/world_sync.gd").new()
 	_receiver = load(base+"/snapshot_transfer.gd").new()
@@ -62,6 +74,7 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 	transport.message_received.connect(_on_message)
 	transport.disconnected.connect(_on_disconnected)
 	transport.failed.connect(_on_transport_failed)
+	load_progress.connect(_send_load_status)
 
 func host() -> Dictionary:
 	leave()
@@ -86,6 +99,16 @@ func leave() -> void:
 	_connections.clear()
 	_peer_epochs.clear()
 	_world_retries.clear()
+	_markers.clear()
+	_status.clear()
+	_player_status.clear()
+	_peer_positions.clear()
+	_peer_stages.clear()
+	_status_announced_at.clear()
+	_status_due = 3.0
+	_sent_stage = ""
+	markers_changed.emit([])
+	player_status_changed.emit({})
 	version_mismatch.clear()
 	connection_id = ""
 	_loading = false
@@ -141,6 +164,15 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 
 func _process(delta: float) -> void:
 	if session==null or _leaving: return
+	_markers.advance(delta)
+	_status_due += delta
+	if session.is_host and session.state!=session.State.OFFLINE and _status_due>=3.0:
+		_status_due = 0.0
+		for peer in session.roster:
+			if peer==1 or not session.roster[peer].accepted or not _connections.has(peer): continue
+			var probe: Dictionary = _status.begin(peer,Time.get_ticks_msec())
+			if probe.ok: _queue(peer,"STATUS_PROBE",{"token":probe.value})
+		_publish_collaboration()
 	if _adapter.has_method("maintain_shared_settings"):
 		var maintained: Dictionary = _adapter.maintain_shared_settings()
 		if not maintained.ok:
@@ -194,11 +226,24 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				_queue(peer,"REJECT",rejection)
 				# Deliver rejection before disconnecting on the next frame.
 				return
+			_status_due = 3.0
 			if not _pending.has(peer) and not _preparing.has(peer) and session.roster[peer].state!="playing": _start_world(peer)
 			return
 		if message.session!=session.session_id or not _connections.has(peer) or body.get("_connection")!=_connections[peer]: return
 		if not session.roster.has(peer) or not session.roster[peer].accepted: return
 		match message.type:
+			"MARKER_REQUEST":
+				if session.roster[peer].state=="playing" and body.get("position") is Vector3 and body.get("kind") is String and _peer_positions.has(peer):
+					var placed: Dictionary = _markers.place(peer,body.position,body.kind,_peer_positions[peer])
+					if placed.ok: _publish_collaboration()
+			"STATUS_REPLY":
+				if typeof(body.get("token"))==TYPE_INT and _status.accept_reply(peer,body.token,Time.get_ticks_msec()).ok: _publish_collaboration()
+			"LOAD_STATUS":
+				var now := Time.get_ticks_msec()
+				if session.roster[peer].state!="playing" and now-int(_status_announced_at.get(peer,-1000))>=200 and body.get("stage") in ["waiting","receiving","loading","catching_up"] and _peer_stages.get(peer,"")!=body.stage:
+					_status_announced_at[peer] = now
+					_peer_stages[peer] = body.stage
+					_publish_collaboration()
 			"WORLD_READY": _finish_world(peer,body)
 			"WORLD_REQUEST":
 				if not _preparing.has(peer):
@@ -224,12 +269,14 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 					if not updated.ok:
 						_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":false,"code":updated.code})
 						return
+					if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
 				var applied: Dictionary = world_sync.submit_action(peer,body.sequence,body.kind,body.payload)
 				_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":applied.ok,"code":applied.code})
 			"POSE":
 				if session.roster[peer].state!="playing" or not body.get("pose") is Dictionary: return
 				if _adapter.has_method("update_actor_pose"):
 					if not _adapter.update_actor_pose(peer,body.pose).ok: return
+				if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
 				pose_received.emit(peer,body.pose)
 				_broadcast_pose(peer,body.pose)
 		return
@@ -253,6 +300,11 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 		return
 	if message.session!=session.session_id or body.get("_connection")!=connection_id or connection_id.is_empty(): return
 	match message.type:
+		"MARKERS":
+			if _markers.accept_snapshot(body.get("rows")).ok: markers_changed.emit(_markers.snapshot())
+		"STATUS_PROBE":
+			if typeof(body.get("token"))==TYPE_INT and body.token>0: _queue(1,"STATUS_REPLY",{"token":body.token})
+		"PLAYER_STATUS": _accept_player_status(body.get("rows"))
 		"SNAPSHOT_BEGIN", "SNAPSHOT_CHUNK":
 			if message.type=="SNAPSHOT_BEGIN": _resync_pending = false
 			var received: Dictionary = _receiver.receive(1,body)
@@ -293,6 +345,7 @@ func _start_world(peer: int) -> void:
 		_fail(_adapter.last_sync_error if not _adapter.last_sync_error.is_empty() else "WORLD_NOT_READY",peer)
 		return
 	var spawn: Transform3D = actor.value.global_transform if actor.value is Node3D else Transform3D.IDENTITY
+	_peer_positions[peer] = spawn.origin
 	var transfer: Node = load(get_script().resource_path.get_base_dir()+"/snapshot_transfer.gd").new()
 	add_child(transfer)
 	var begun: Dictionary = transfer.begin({"mode":"world","native":captured.value,"frame":frame,"spawn":spawn},session.session_id,world_sync.revision)
@@ -353,6 +406,7 @@ func _finish_world(peer: int, body: Dictionary) -> void:
 	_world_retries.erase(peer)
 	session.mark_world_ready(peer)
 	_queue(peer,"WORLD_READY",{"stage":"caught_up","revision":world_sync.revision})
+	_publish_collaboration()
 
 func _on_confirmed(event: Dictionary) -> void:
 	for peer in session.roster:
@@ -395,6 +449,11 @@ func _request_resync() -> void:
 
 func _on_roster_changed() -> void:
 	if not session.is_host or _leaving: return
+	for departed in _peer_stages.keys():
+		if not session.roster.has(departed):
+			_peer_stages.erase(departed)
+			_status.remove_peer(departed)
+			_markers.remove_peer(departed)
 	for peer in session.roster:
 		if peer!=1 and session.roster[peer].accepted and _connections.has(peer): _queue(peer,"ROSTER",{"roster":session.roster.values()})
 
@@ -409,6 +468,11 @@ func _on_disconnected(peer: int) -> void:
 		return
 	_peer_epochs[peer] = int(_peer_epochs.get(peer,0))+1
 	_world_retries.erase(peer)
+	_markers.remove_peer(peer)
+	_status.remove_peer(peer)
+	_peer_positions.erase(peer)
+	_peer_stages.erase(peer)
+	_status_announced_at.erase(peer)
 	_preparing.erase(peer)
 	_connections.erase(peer)
 	if _pending.has(peer):
@@ -417,6 +481,54 @@ func _on_disconnected(peer: int) -> void:
 	_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
 	world_sync.remove_peer(peer)
 	_adapter.remove_actor(peer)
+	if session.is_host: _publish_collaboration()
+
+func request_marker(position: Vector3, kind: String) -> Dictionary:
+	if session.state!=session.State.PLAYING: return _error("PEER_NOT_READY")
+	if not position.is_finite() or kind not in ["point","build","needle","help"]: return _error("MARKER_INVALID")
+	if not session.is_host: return _queue(1,"MARKER_REQUEST",{"position":position,"kind":kind})
+	var pose: Dictionary = _adapter.read_local_pose()
+	if not pose.ok or not pose.value.get("position") is Vector3: return _error("WORLD_NOT_READY")
+	var result: Dictionary = _markers.place(1,position,kind,pose.value.position)
+	if result.ok: _publish_collaboration()
+	return result
+
+func collaboration_snapshot() -> Dictionary:
+	return {"markers":_markers.snapshot() if _markers!=null else [],"players":_player_status.duplicate(true)}
+
+func _publish_collaboration() -> void:
+	if not session.is_host or _leaving: return
+	var rows: Array = []
+	_player_status.clear()
+	for peer in session.roster:
+		var member: Dictionary = session.roster[peer]
+		var stage: String = "playing" if member.state=="playing" else ("connecting" if not member.accepted else _peer_stages.get(peer,"waiting"))
+		var row := {"peer":peer,"state":stage,"latency_ms":-1 if peer==1 else _status.snapshot(peer,Time.get_ticks_msec()).latency_ms}
+		_player_status[peer] = row
+		rows.append(row)
+	var markers: Array = _markers.snapshot()
+	markers_changed.emit(markers)
+	player_status_changed.emit(_player_status.duplicate(true))
+	for peer in session.roster:
+		if peer!=1 and session.roster[peer].accepted and _connections.has(peer):
+			_queue(peer,"MARKERS",{"rows":markers})
+			_queue(peer,"PLAYER_STATUS",{"rows":rows})
+
+func _accept_player_status(rows: Variant) -> void:
+	if not rows is Array or rows.size()>4: return
+	var checked := {}
+	for row in rows:
+		if not row is Dictionary or row.size()!=3 or typeof(row.get("peer"))!=TYPE_INT or not session.roster.has(row.peer) or checked.has(row.peer): return
+		if row.get("state") not in ["connecting","waiting","receiving","loading","catching_up","playing"] or typeof(row.get("latency_ms"))!=TYPE_INT or row.latency_ms < -1 or row.latency_ms>9000: return
+		checked[row.peer] = row.duplicate()
+	_player_status = checked
+	player_status_changed.emit(checked.duplicate(true))
+
+func _send_load_status(stage: String, _received: int, _total: int) -> void:
+	if _leaving or session==null or session.is_host or connection_id.is_empty() or stage==_sent_stage: return
+	if stage in ["waiting","receiving","loading","catching_up"]:
+		_sent_stage = stage
+		_queue(1,"LOAD_STATUS",{"stage":stage})
 
 func _fail(code: String, peer: int=0) -> void:
 	if _leaving: return

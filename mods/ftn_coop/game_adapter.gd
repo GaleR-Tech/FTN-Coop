@@ -125,6 +125,21 @@ func set_local_spawn(transform: Transform3D) -> Dictionary:
 func local_player_body() -> CharacterBody3D:
 	return nodes.get("player") as CharacterBody3D
 
+func read_marker_target() -> Dictionary:
+	var player := local_player_body()
+	if player==null or not player.is_inside_tree(): return _error("WORLD_NOT_READY")
+	var camera: Variant = player.get("camera")
+	if not camera is Camera3D or not camera.is_inside_tree(): return _error("MARKER_NO_SURFACE")
+	var origin: Vector3 = camera.global_position
+	var target: Vector3 = origin-camera.global_basis.z*50.0
+	var query := PhysicsRayQueryParameters3D.create(origin,target,0xffffffff,[player.get_rid()])
+	var hit: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or not hit.get("position") is Vector3 or not hit.position.is_finite() or player.global_position.distance_to(hit.position)>50.0: return _error("MARKER_NO_SURFACE")
+	return _ok(hit.position)
+
+func marker_input_allowed() -> bool:
+	return Input.mouse_mode==Input.MOUSE_MODE_CAPTURED
+
 func set_local_look(yaw: float, pitch: float) -> void:
 	if not guest_mode or not is_finite(yaw) or not is_finite(pitch): return
 	var player := local_player_body()
@@ -176,6 +191,10 @@ func restore_shared_settings() -> void:
 func update_shared_setting(key: String, value: Variant) -> Dictionary:
 	if guest_mode: return _error("HOST_ONLY")
 	return _settings().update_host(key,value)
+
+func update_shared_settings(values: Variant) -> Dictionary:
+	if guest_mode: return _error("HOST_ONLY")
+	return _settings().update_host_values(values)
 
 func guest_options() -> Dictionary:
 	var result := {"tools":[],"shop":[],"buildings":[],"upgrades":[]}

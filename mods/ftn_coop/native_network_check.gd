@@ -36,6 +36,8 @@ var _offline_path := ""
 var _offline_hash := ""
 var _offline_directory := ""
 var _settings_original: Dictionary = {}
+var _expected_disconnect := false
+var _collaboration_running := false
 const TEST_SETTINGS := {"prop_cap":300,"prop_decay":true,"belt_cap":600,"belt_decay":true,"auto_clean":false,"auto_clean_seconds":90.0,"grid_lock":false,"autosave":false,"autosave_seconds":180.0}
 
 func _ready() -> void:
@@ -102,15 +104,16 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.2.0")
+		_runtime.configure(_adapter,transport,"25963876","0.3.0")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.2.0")
+		_network.configure(transport,_adapter,"25963876","0.3.0")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
+		if _expected_disconnect and code in ["HOST_LEFT","HOST_DISCONNECTED","NOT_CONNECTED","SEND_FAILED"]: return
 		if code not in ["INSUFFICIENT_FUNDS","PURCHASE_REFUSED"]: _fatal = code
 	)
 	_network.action_result.connect(func(sequence: int, ok: bool, code: String): _results[sequence]={"ok":ok,"code":code})
@@ -121,11 +124,14 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 				var menu: Node = _adapter.nodes.world.get("shop_menu")
 				_checks.host_shop_preserved = menu.get("_open")==_host_shop_before.open and menu.get("visible")==_host_shop_before.visible and Input.mouse_mode==_host_shop_before.mouse
 	)
-	var begun: Dictionary = _network.host() if _role=="host" else _network.join(1)
+	var begun: Dictionary = {"ok":true,"code":"OK","value":null}
+	if _role=="host": begun = _network.host()
+	elif _presence_check: _runtime.join_invitation(1)
+	else: begun = _network.join(1)
 	if not begun.ok: return _finish(begun.code)
 	if _role=="guest": _guest_actions()
 	_stage = "waiting"
-	var deadline := Time.get_ticks_msec()+(360000 if _count==4 else 110000)
+	var deadline := Time.get_ticks_msec()+((480000 if _count==4 else 220000) if _presence_check else (360000 if _count==4 else 110000))
 	while Time.get_ticks_msec()<deadline:
 		await get_tree().process_frame
 		if not _fatal.is_empty(): break
@@ -140,6 +146,10 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 		_adapter.nodes.cfg.call("load_settings")
 		_checks.settings_disk_restored = _adapter.read_shared_settings().value==_settings_original and is_equal_approx(float(_adapter.nodes.cfg.get("mouse_sensitivity")),0.42)
 		if not _checks.settings_restored or not _checks.settings_disk_restored or not _checks.get("settings_live",false): _fatal = "SETTINGS_RESTORE_FAILED"
+		if _presence_check:
+			for key in ["native_f3","marker_common","marker_colors","connection_status","preset_live"]:
+				if not _checks.get(key,false): _fatal = "CHECK_"+key.to_upper()
+			if _index==1 and not _checks.get("rejoin_button",false): _fatal = "REJOIN_BUTTON_FAILED"
 	if _save_check and _fatal.is_empty():
 		if _role=="guest":
 			_checks.offline_unchanged = not _offline_hash.is_empty() and FileAccess.get_sha256(_offline_path)==_offline_hash
@@ -183,6 +193,9 @@ func _guest_actions() -> void:
 	if not _checks.settings_join or not _checks.settings_enforced or not _checks.settings_file_untouched:
 		_fatal = "SETTINGS_JOIN_FAILED"
 		return
+	if _presence_check:
+		await _guest_collaboration()
+		if not _fatal.is_empty(): return
 	var player: Node3D = _adapter.nodes.player
 	if _presence_check:
 		var bound: Dictionary = _runtime.movement.configure(_adapter)
@@ -249,6 +262,9 @@ func _process(delta: float) -> void:
 	if _finished or _network==null or _adapter==null or _directory.is_empty(): return
 	if _role=="guest" and _network.session.state==_network.session.State.PLAYING and _adapter.nodes.cfg.get("prop_cap")==330:
 		_checks.settings_live = true
+		var expected := TEST_SETTINGS.duplicate(true)
+		expected.prop_cap = 330
+		_checks.preset_live = _adapter.read_shared_settings().value==expected
 	if _network.session.state==_network.session.State.PLAYING:
 		var revision: int = _network.world_sync.revision
 		if revision!=_last_revision:
@@ -292,6 +308,9 @@ func _process(delta: float) -> void:
 					_building_history.erase(oldest)
 					_load_history.erase(oldest)
 		if _role=="host" and not _extra_running:
+			if _presence_check and _stage=="waiting" and not _collaboration_running and _all_stage("collab_ready"):
+				_collaboration_running = true
+				_host_collaboration()
 			if _stage=="waiting" and _all_stage("dig_done"):
 				_adapter.nodes.state.set("money",float(_adapter.nodes.world.get("shop").call("live_price","bucket")))
 				_network.world_sync.poll()
@@ -384,6 +403,12 @@ func _extra_actions() -> void:
 	if _presence_check:
 		_runtime.ui.set_shared_settings(_adapter.read_shared_settings().value)
 		_runtime.ui._settings_controls.prop_cap.value = 330
+		_runtime.ui._preset_name.text = "Native check"
+		_runtime.ui._preset_save.pressed.emit()
+		_adapter.update_shared_setting("prop_cap",310)
+		_runtime.ui._preset_apply.pressed.emit()
+		var preset: Dictionary = _runtime._presets.load_preset("Native check")
+		_checks.preset_roundtrip = preset.ok and preset.value.prop_cap==330 and _adapter.nodes.cfg.get("prop_cap")==330
 	else: _adapter.update_shared_setting("prop_cap",330)
 	_checks.settings_host_edit = _adapter.nodes.cfg.get("prop_cap")==330
 	_network.world_sync.poll()
@@ -416,10 +441,121 @@ func _extra_actions() -> void:
 	if _presence_check and not _checks.get("loaded_departure",false):
 		_fatal = "LOADED_DEPARTURE_FAILED"
 		_done = false
+	if _presence_check:
+		for key in ["native_f3","marker_common","marker_colors","connection_status","marker_departure_cleanup","preset_roundtrip"]:
+			if not _checks.get(key,false):
+				_fatal = "CHECK_"+key.to_upper()
+				_done = false
 	_stage = "actions_done"
 	if _presence_check:
 		_checks.avatars = _runtime.presence.avatars.size()==_count-1
 		_runtime.ui.set_panel_open(true)
+
+func _place_native_marker() -> bool:
+	var player: Node3D = _adapter.nodes.player
+	var x := float(_index*2)
+	player.global_position = Vector3(x,float(_adapter.nodes.field.call("top_at",x,3.0))+1.0,3.0)
+	player.call("set_look",0.0,-1.35)
+	_runtime.ui.set_panel_open(false)
+	_runtime.ui._marker_selector.select(1 if _role=="host" else 3)
+	get_tree().root.grab_focus()
+	for frame in range(4): await get_tree().physics_frame
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_F3
+	key.pressed = true
+	_checks.marker_input = {"allowed":_runtime._marker_input_allowed(),"mouse":Input.mouse_mode,"state":_network.session.state,"position":str(player.global_position),"camera":str(player.get("camera").global_basis.z)}
+	_runtime._unhandled_input(key)
+	_checks.marker_input.queued = _runtime._marker_requested
+	for frame in range(8): await get_tree().process_frame
+	_checks.marker_input.cooldown = _runtime._marker_cooldown
+	_checks.marker_input.count = _network.collaboration_snapshot().markers.size()
+	var local: int = _network._transport.local_peer_id()
+	for row in _network.collaboration_snapshot().markers:
+		if row.peer==local: return _runtime._world_markers._nodes.has(local)
+	return false
+
+func _collaboration_checks() -> bool:
+	var snapshot: Dictionary = _network.collaboration_snapshot()
+	_checks.marker_common = snapshot.markers.size()==_count and _runtime._world_markers._nodes.size()==_count
+	_checks.connection_status = snapshot.players.size()==_count
+	for peer in snapshot.players:
+		if peer!=1 and snapshot.players[peer].latency_ms<0: _checks.connection_status = false
+	var colors: Script = load(get_script().resource_path.get_base_dir()+"/player_colors.gd")
+	_checks.marker_colors = true
+	for peer in _network.session.roster:
+		var expected: Color = colors.for_peer(peer,_network.session.roster)
+		if not _runtime.ui._roster_labels.has(peer) or _runtime.ui._roster_labels[peer].get_theme_color("font_color")!=expected: _checks.marker_colors = false
+		if _runtime.presence.avatars.has(peer) and _runtime.presence.avatars[peer]._material.albedo_color!=expected: _checks.marker_colors = false
+		if not _runtime._world_markers._nodes.has(peer) or _runtime._world_markers._nodes[peer].get_node("Pin").material_override.albedo_color!=expected: _checks.marker_colors = false
+	return _checks.marker_common and _checks.marker_colors and _checks.connection_status
+
+func _connection_ready() -> bool:
+	var players: Dictionary = _network.collaboration_snapshot().players
+	if players.size()!=_count: return false
+	for peer in players:
+		if peer!=1 and players[peer].latency_ms<0: return false
+	return true
+
+func _guest_collaboration() -> void:
+	_runtime.ui.set_language("en" if _index%2==1 else "de")
+	_stage = "collab_ready"
+	var deadline := Time.get_ticks_msec()+(240000 if _count==4 else 90000)
+	while _read("host").get("stage")!="collab_place_"+str(_index) and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	_checks.native_f3 = await _place_native_marker()
+	_stage = "collab_marked"
+	while _read("host").get("stage")!="collab_verify" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	for frame in range(4): await get_tree().process_frame
+	_collaboration_checks()
+	_stage = "collab_verified"
+	if _index==1:
+		while _read("host").get("stage")!="collab_drop" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+		_expected_disconnect = true
+		var cookie: String = _network.connection_id
+		_stage = "collab_drop_ready"
+		while _network.session.state!=_network.session.State.OFFLINE and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+		while _network.save_session.closing and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+		_runtime._process(0.2)
+		_checks.rejoin_button = _runtime.ui._rejoin_button.visible and not _runtime.ui._rejoin_button.disabled
+		_runtime.ui._rejoin_button.pressed.emit()
+		while _network.session.state!=_network.session.State.PLAYING and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+		_checks.rejoin_button = _checks.rejoin_button and _network.session.state==_network.session.State.PLAYING and _network.connection_id!=cookie
+		_expected_disconnect = false
+		_stage = "collab_rejoined"
+	while _read("host").get("stage")!="collab_finish" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	for key in ["native_f3","marker_common","marker_colors","connection_status"]:
+		if not _checks.get(key,false): _fatal = "CHECK_"+key.to_upper()
+	if _index==1 and not _checks.get("rejoin_button",false): _fatal = "REJOIN_BUTTON_FAILED"
+	if Time.get_ticks_msec()>=deadline: _fatal = "COLLABORATION_TIMEOUT"
+
+func _host_collaboration() -> void:
+	_stage = "collab_place"
+	_checks.native_f3 = await _place_native_marker()
+	var deadline := Time.get_ticks_msec()+90000
+	# Only one native window can own captured mouse input on this test PC.
+	for index in range(1,_count):
+		_stage = "collab_place_"+str(index)
+		while _read("guest-"+str(index)).get("stage")!="collab_marked" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	while not _all_stage("collab_marked") and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	while not _connection_ready() and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	for frame in range(6): await get_tree().process_frame
+	_collaboration_checks()
+	_stage = "collab_verify"
+	while not _all_stage("collab_verified") and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	_stage = "collab_drop"
+	while _read("guest-1").get("stage")!="collab_drop_ready" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	var departing := 0
+	for peer in _network.session.roster:
+		if _network.session.roster[peer].name=="Netztest 1": departing = peer
+	if departing>1: _network._transport.reject_peer(departing)
+	_checks.marker_departure_cleanup = departing>1
+	for row in _network.collaboration_snapshot().markers:
+		if row.peer==departing: _checks.marker_departure_cleanup = false
+	while (_read("guest-1").get("stage")!="collab_rejoined" or _network.session.roster.size()!=_count) and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	_stage = "collab_finish"
+	while not _all_stage("dig_done") and Time.get_ticks_msec()<deadline: await get_tree().process_frame
+	if Time.get_ticks_msec()>=deadline: _fatal = "COLLABORATION_TIMEOUT"
+	_stage = "waiting"
 
 func _check_loaded_departure(actor: Node3D, peer: int) -> void:
 	print("[FTN-Coop-Test] loaded departure: scoop")

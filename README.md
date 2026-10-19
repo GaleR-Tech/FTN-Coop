@@ -1,4 +1,4 @@
-# FTN-Coop · 0.2.0
+# FTN-Coop · 0.3.0
 
 [English](#english) · [Deutsch](#deutsch)
 
@@ -49,7 +49,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.2.0-Setup.exe**:
+The easiest option is **FTN-Coop-0.3.0-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -130,6 +130,38 @@ Graphics, audio, language and controls remain personal. Changes to personal opti
 made as a guest are saved when leaving or closing the demo normally; forced
 termination may lose those latest personal changes. Temporary host values are not
 written into the guest's personal settings file.
+
+### Markers, player status and rejoining
+
+New in **0.3.0**: press **F3** during play to mark the surface under your crosshair,
+up to 50 meters away. In F2, choose **Point**, **Build here**, **Needle here** or
+**Help**. Each player has one marker, which lasts 20 seconds; a new one replaces
+it. Markers, names and avatars use matching player colors. Menus, text input
+and world loading block marker input.
+
+F2 shows each player's loading/synchronization/play status and measured round-trip
+delay. Missing measurements are shown as unavailable; the local host is labeled
+**Host**. Measurements include game processing time.
+
+After an unexpected disconnect, **Rejoin last session** starts a fresh join once
+the old guest world has closed. The host must still have the same session open.
+Voluntary leaving and closing the demo forget that target. Rejoining loads the
+current host world and does not guarantee your previous position.
+
+### Gameplay presets and update checking
+
+The host can save, apply and delete up to 20 named presets under F2 → **Shared
+gameplay settings**. They store only the nine shared gameplay values locally.
+Guests receive applied values automatically; personal settings stay individual.
+
+**Check for updates** contacts the public GitHub Releases service only when
+clicked. A newer normal release offers a link to the project's download page;
+nothing is downloaded or installed automatically. Checks are limited to once
+per minute. Offline/rate-limit errors leave play available. Player names,
+Steam IDs, lobby identifiers, local paths, reports and saves are not included.
+
+0.3.0 is published as a normal GitHub release. Internet play between separate
+Steam accounts remains unverified.
 
 ### Save and leave
 
@@ -224,7 +256,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.2.0-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.3.0-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -306,6 +338,41 @@ der Gastsitzung geänderte persönliche Optionen werden beim normalen Verlassen 
 Schließen der Demo gespeichert; bei erzwungenem Beenden können diese letzten
 persönlichen Änderungen verloren gehen. Vorübergehende Host-Werte werden nicht in
 die persönliche Einstellungsdatei des Gastes geschrieben.
+
+### Markierungen, Spielerstatus und Wiederbeitritt
+
+Neu in **0.3.0**: **F3** markiert beim Spielen die angeschaute Oberfläche in
+höchstens 50 Metern Entfernung. In F2 wählst du **Markierung**, **Hier bauen**,
+**Hier liegt eine Nadel** oder **Hilfe**. Jeder hat eine Markierung für 20 Sekunden;
+eine neue ersetzt sie. Markierungen, Namen und Figuren verwenden passende
+Spielerfarben. Menüs, Texteingaben und das Laden einer Welt sperren F3-Markierungen.
+
+F2 zeigt Laden/Abgleichen/Spielen und die gemessene Antwortzeit. Fehlende Messungen
+werden als nicht verfügbar angezeigt; der lokale Host steht als **Host** in der
+Liste. Die Messung enthält auch die Verarbeitungszeit des Spiels.
+
+Nach unerwartetem Verbindungsverlust startet **Letzter Sitzung erneut beitreten**
+einen frischen Beitritt, sobald die alte Gastwelt geschlossen ist. Der Host muss
+dieselbe Sitzung noch geöffnet haben. Bewusstes Verlassen und das Schließen der
+Demo löschen das Ziel. Geladen wird die aktuelle Host-Welt; die alte Position
+ist nicht garantiert.
+
+### Einstellungsvorlagen und Updateprüfung
+
+Der Host kann unter F2 → **Gemeinsame Spieleinstellungen** bis zu 20 benannte
+Vorlagen speichern, anwenden und löschen. Sie enthalten nur die neun gemeinsamen
+Spielwerte und bleiben lokal. Gäste übernehmen angewandte Werte automatisch;
+persönliche Einstellungen bleiben getrennt.
+
+**Nach Updates suchen** fragt erst beim Klick den öffentlichen GitHub-Releases-Dienst
+ab. Bei einer neueren normalen Version führt ein Knopf zu den Mod-Downloads;
+es wird nichts automatisch heruntergeladen oder installiert. Abfragen sind einmal
+pro Minute möglich. Ohne Verbindung oder bei einem Anfragelimit bleibt das Spiel
+benutzbar. Spielernamen, Steam-IDs, Lobbykennungen, lokale Pfade, Berichte und
+Spielstände werden nicht mitgeschickt.
+
+0.3.0 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
+getrennten Steam-Konten bleibt unbestätigt.
 
 ### Speichern und Verlassen
 

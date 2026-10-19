@@ -1,6 +1,11 @@
 extends SceneTree
 
 const SUITES := {
+	"collaboration_ui": "res://tests/test_collaboration_ui.gd",
+	"rejoin": "res://tests/test_rejoin.gd",
+	"update_checker": "res://tests/test_update_checker.gd",
+	"presets": "res://tests/test_presets.gd",
+	"collaboration": "res://tests/test_collaboration.gd",
 	"shared_settings": "res://tests/test_shared_settings.gd",
 	"mod_versions": "res://tests/test_mod_versions.gd",
 	"localization": "res://tests/test_localization.gd",

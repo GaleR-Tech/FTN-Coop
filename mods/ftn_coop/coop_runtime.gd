@@ -16,6 +16,15 @@ var _hud_due := 0.0
 var _pending_invitation := 0
 var _was_host := false
 var _transport_ready := false
+var _rejoin: RefCounted
+var _presets: RefCounted
+var _updates: Node
+var _update_client: Node
+var _world_markers: Node3D
+var _marker_requested := false
+var _marker_cooldown := 0.0
+
+func _init(update_client: Node=null) -> void: _update_client = update_client
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -26,6 +35,7 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	_build = build
 	_version = version
 	var base: String = get_script().resource_path.get_base_dir()
+	_rejoin = load(base+"/rejoin_state.gd").new()
 	if not transport.is_inside_tree(): add_child(transport)
 	network = load(base+"/network_controller.gd").new()
 	add_child(network)
@@ -34,9 +44,17 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	add_child(ui)
 	ui.bind_session(network.session)
 	ui.configure_diagnostics(build,version)
+	_presets = load(base+"/preset_store.gd").new()
+	_updates = load(base+"/update_checker.gd").new(_update_client)
+	add_child(_updates)
+	_updates.configure(version)
+	_updates.completed.connect(ui.set_update_result)
+	_reload_presets()
 	network.load_progress.connect(ui.set_load_progress)
 	presence = load(base+"/presence.gd").new()
 	add_child(presence)
+	_world_markers = load(base+"/world_markers.gd").new()
+	add_child(_world_markers)
 	movement = load(base+"/guest_movement.gd").new()
 	add_child(movement)
 	input_bridge = load(base+"/input_bridge.gd").new()
@@ -48,14 +66,22 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	ui.save_requested.connect(_save)
 	ui.copy_report_requested.connect(_copy_report)
 	ui.shared_setting_requested.connect(_change_shared_setting)
+	ui.preset_save_requested.connect(_save_preset)
+	ui.preset_apply_requested.connect(_apply_preset)
+	ui.preset_delete_requested.connect(_delete_preset)
+	ui.update_check_requested.connect(_check_updates)
+	ui.rejoin_requested.connect(rejoin_last_session)
 	ui.language_changed.connect(func():
 		if _is_guest(): _populate_actions()
+		_refresh_marker_display()
 	)
 	ui.panel_toggled.connect(_on_panel_toggled)
 	ui.action_requested.connect(_request)
 	input_bridge.action_requested.connect(_on_primary)
 	network.problem.connect(func(code: String): ui.show_error(code,network.version_mismatch))
 	network.pose_received.connect(presence.apply_pose)
+	network.markers_changed.connect(func(_rows: Array): _refresh_marker_display())
+	network.player_status_changed.connect(ui.set_player_status)
 	network.session.roster_changed.connect(_roster_changed)
 	network.session.state_changed.connect(_state_changed)
 	network.stopped.connect(_stopped)
@@ -88,6 +114,8 @@ func start_host() -> void:
 	if not checked.ok:
 		ui.show_error(checked.code)
 		return
+	_rejoin.clear()
+	_pending_invitation = 0
 	var result: Dictionary = network.host()
 	if not result.ok: ui.show_error(result.code)
 	else:
@@ -98,6 +126,11 @@ func join_invitation(lobby: int) -> void:
 	if _build!="25963876":
 		ui.show_error("BUILD_UNVERIFIED")
 		return
+	if lobby<=0:
+		ui.show_error("LOBBY_INVALID")
+		return
+	_rejoin.remember(lobby)
+	_pending_invitation = 0
 	var result: Dictionary = network.join(lobby)
 	if not result.ok:
 		if result.code=="GUEST_SESSION_BUSY" and network.save_session.closing: _pending_invitation = lobby
@@ -133,9 +166,82 @@ func _change_shared_setting(key: String, value: Variant) -> void:
 		ui.set_shared_settings(changed.value)
 		network.world_sync.poll()
 
+func _host_settings_ready() -> bool:
+	return network.session.is_host and network.session.state==network.session.State.PLAYING and not network.save_session.closing
+
+func _reload_presets() -> void:
+	var listed: Dictionary = _presets.list_names()
+	if listed.ok: ui.set_presets(listed.value)
+	else: ui.show_error(listed.code)
+
+func _save_preset(name: String) -> void:
+	if not _host_settings_ready():
+		ui.show_error("SETTINGS_HOST_ONLY")
+		return
+	if not _adapter.has_method("read_shared_settings"): return
+	var captured: Dictionary = _adapter.read_shared_settings()
+	if not captured.ok:
+		ui.show_error(captured.code)
+		return
+	var result: Dictionary = _presets.save_preset(name,captured.value)
+	if not result.ok: ui.show_error(result.code)
+	else:
+		_reload_presets()
+		ui.show_preset_notice("saved")
+
+func _apply_preset(name: String) -> void:
+	if not _host_settings_ready():
+		ui.show_error("SETTINGS_HOST_ONLY")
+		return
+	var loaded: Dictionary = _presets.load_preset(name)
+	if not loaded.ok:
+		ui.show_error(loaded.code)
+		return
+	if not _adapter.has_method("update_shared_settings"): return
+	var result: Dictionary = _adapter.update_shared_settings(loaded.value)
+	if not result.ok: ui.show_error(result.code)
+	else:
+		ui.set_shared_settings(result.value)
+		network.world_sync.poll()
+		ui.show_preset_notice("applied")
+
+func _delete_preset(name: String) -> void:
+	if not _host_settings_ready():
+		ui.show_error("SETTINGS_HOST_ONLY")
+		return
+	var result: Dictionary = _presets.delete_preset(name)
+	if not result.ok: ui.show_error(result.code)
+	else:
+		_reload_presets()
+		ui.show_preset_notice("deleted")
+
+func _check_updates() -> void:
+	ui.set_update_result({"ok":false,"code":"CHECKING","value":null})
+	var result: Dictionary = _updates.check()
+	if not result.ok: ui.set_update_result(result)
+	ui.set_update_available(_updates.available())
+
+func _refresh_marker_display() -> void:
+	if _world_markers==null: return
+	if network.session.state!=network.session.State.PLAYING:
+		_world_markers.clear()
+		return
+	_world_markers.set_markers(network.collaboration_snapshot().markers,network.session.roster,ui.current_language())
+
 func _leave() -> void:
+	_rejoin.clear()
 	_pending_invitation = 0
 	network.leave()
+
+func rejoin_last_session() -> void:
+	if _rejoin==null or _rejoin.target()<=0 or network.session.state!=network.session.State.OFFLINE: return
+	if network.save_session.closing:
+		_pending_invitation = _rejoin.target()
+		return
+	if network.save_session.guest_open:
+		ui.show_error("GUEST_CLEANUP_FAILED")
+		return
+	join_invitation(_rejoin.target())
 
 func _guest_closed(result: Dictionary) -> void:
 	ui.set_session_closing(false)
@@ -153,6 +259,7 @@ func _roster_changed() -> void:
 	var session: Node = network.session
 	if session.state==session.State.OFFLINE: presence.clear()
 	else: presence.sync_roster(_transport.local_peer_id(),session.roster)
+	_refresh_marker_display()
 
 func _state_changed() -> void:
 	if network.session.state==network.session.State.PLAYING and network.session.is_host: _was_host = true
@@ -160,8 +267,12 @@ func _state_changed() -> void:
 		_populate_actions()
 		ui.set_panel_open(false)
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_refresh_marker_display()
 
 func _stopped() -> void:
+	_marker_requested = false
+	_marker_cooldown = 0.0
+	_world_markers.clear()
 	input_bridge.enabled = false
 	movement.enabled = false
 	_guest_player_id = 0
@@ -190,6 +301,7 @@ func _is_guest() -> bool:
 
 func _process(delta: float) -> void:
 	if network==null: return
+	_marker_cooldown = maxf(0.0,_marker_cooldown-delta)
 	var guest := _is_guest()
 	input_bridge.enabled = guest and ui.actions_allowed()
 	movement.enabled = input_bridge.enabled
@@ -204,6 +316,8 @@ func _process(delta: float) -> void:
 	if _hud_due>=0.2:
 		_hud_due = 0.0
 		_prepare_transport()
+		ui.set_update_available(_updates.available())
+		ui.set_rejoin_available(_rejoin.target()>0,_rejoin.can_rejoin(network.session.state==network.session.State.OFFLINE,network.save_session.closing or network.save_session.guest_open))
 		if _adapter.has_method("shared_summary"): ui.set_shared_summary(_adapter.shared_summary())
 		if _adapter.has_method("read_shared_settings"):
 			var settings: Dictionary = _adapter.read_shared_settings()
@@ -230,10 +344,39 @@ func _request(kind: String, payload: Dictionary) -> void:
 	if not result.ok: ui.show_error(result.code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F3:
+		if _marker_input_allowed():
+			_marker_requested = true
+			get_viewport().set_input_as_handled()
+		return
 	if not _is_guest() or not ui.actions_allowed(): return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode>=KEY_1 and event.physical_keycode<=KEY_8:
 		_select_tool(event.physical_keycode-KEY_1)
 		get_viewport().set_input_as_handled()
+
+func _marker_input_allowed() -> bool:
+	if network==null or not ui.actions_allowed() or get_tree().paused: return false
+	if _adapter.has_method("marker_input_allowed"):
+		if not _adapter.marker_input_allowed(): return false
+	elif Input.mouse_mode!=Input.MOUSE_MODE_CAPTURED: return false
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	return not focus is LineEdit and not focus is TextEdit
+
+func _physics_process(_delta: float) -> void:
+	if not _marker_requested: return
+	_marker_requested = false
+	if not _marker_input_allowed(): return
+	if _marker_cooldown>0:
+		ui.show_marker_feedback("MARKER_RATE_LIMIT")
+		return
+	if not _adapter.has_method("read_marker_target"): return
+	var target: Dictionary = _adapter.read_marker_target()
+	if not target.ok:
+		ui.show_marker_feedback(target.code)
+		return
+	var placed: Dictionary = network.request_marker(target.value,ui.selected_marker_kind())
+	if not placed.ok: ui.show_marker_feedback(placed.code)
+	else: _marker_cooldown = 1.0
 
 func _select_tool(index: int) -> void:
 	var result: Dictionary = _adapter.select_local_tool(index)

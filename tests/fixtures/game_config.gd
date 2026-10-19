@@ -29,3 +29,28 @@ func save_settings() -> void:
 func set_prop_cap(value: int) -> void:
 	prop_cap = clampi(value,20,1500)
 	save_settings()
+
+func set_prop_decay(value: bool) -> void:
+	prop_decay = value
+	save_settings()
+func set_belt_cap(value: int) -> void:
+	belt_cap = clampi(value,20,5000)
+	save_settings()
+func set_belt_decay(value: bool) -> void:
+	belt_decay = value
+	save_settings()
+func set_auto_clean(value: bool) -> void:
+	auto_clean = value
+	save_settings()
+func set_auto_clean_seconds(value: float) -> void:
+	auto_clean_seconds = clampf(value,15,600)
+	save_settings()
+func set_grid_lock(value: bool) -> void:
+	grid_lock = value
+	save_settings()
+func set_autosave(value: bool) -> void:
+	autosave = value
+	save_settings()
+func set_autosave_seconds(value: float) -> void:
+	autosave_seconds = clampf(value,60,1800)
+	save_settings()

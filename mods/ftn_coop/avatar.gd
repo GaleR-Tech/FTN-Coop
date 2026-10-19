@@ -6,11 +6,13 @@ var _pitch := 0.0
 var _initialized := false
 var _label: Label3D
 var _head: Node3D
+var _material: StandardMaterial3D
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
 	var material := StandardMaterial3D.new()
+	_material = material
 	material.albedo_color = Color("e8b654")
 	var body := MeshInstance3D.new()
 	var capsule := CapsuleMesh.new()
@@ -48,6 +50,10 @@ func _ready() -> void:
 
 func set_display_name(value: String) -> void:
 	if _label!=null: _label.text = value.left(32)
+
+func set_display_color(value: Color) -> void:
+	if _material!=null: _material.albedo_color = value
+	if _label!=null: _label.modulate = value
 
 func apply_pose(pose: Dictionary) -> void:
 	if not pose.get("position") is Vector3 or not pose.get("rotation") is Vector3: return

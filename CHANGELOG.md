@@ -1,5 +1,31 @@
 # Changelog / Änderungen
 
+## 0.3.0 · 2026-10-20
+
+### English
+
+- Added F3 world markers with Point, Build here, Needle here and Help types, matching player/avatar colors, a 50-meter reach, per-player replacement and automatic expiry after 20 seconds.
+- Added player loading/synchronization/play status and authenticated round-trip measurements in the F2 list. Invalid and excessive announcements are bounded; markers and measurements stay outside saved world state.
+- Added up to 20 local named presets for the nine shared gameplay settings. The host can save, apply and delete presets; complete validation and safe replacement protect existing values and files.
+- Added optional, manually requested GitHub update checks. A newer normal release offers the fixed project download page; no automatic downloads or installation, and no player/session/save data in the request.
+- Added Rejoin last session after unexpected guest disconnection. Rejoining waits for native guest cleanup, uses a fresh authenticated connection and repeats the normal compatibility checks. Voluntary leaving forgets the target.
+- Kept all new controls, feedback and documentation available in German and English. The existing installer retains its project and Buy me a Coffee links.
+- Version 0.3.0 is a normal GitHub release without the Pre-release label. No guest permissions system was added. Everyone must install 0.3.0 and restart the demo.
+
+Only Find The Needle Demo V66 / build 25963876 on Windows is supported. Internet play between different Steam accounts remains unverified.
+
+### Deutsch
+
+- F3-Weltmarkierungen für Markierung, Hier bauen, Hier liegt eine Nadel und Hilfe ergänzt: passende Spieler-/Figurenfarben, 50 Meter Reichweite, eine Markierung pro Spieler und automatisches Verschwinden nach 20 Sekunden.
+- Spielerstatus für Laden/Abgleichen/Spielen und authentifizierte Antwortzeit-Messungen in F2 ergänzt. Ungültige und übermäßige Meldungen werden begrenzt; Markierungen und Messungen gehören nicht zum gespeicherten Weltzustand.
+- Bis zu 20 lokale benannte Vorlagen für die neun gemeinsamen Spielwerte ergänzt. Der Host kann speichern, anwenden und löschen; vollständige Prüfung und sicheres Ersetzen schützen bisherige Werte und Dateien.
+- Freiwillige, manuell gestartete GitHub-Updateprüfung ergänzt. Bei einer neueren normalen Veröffentlichung führt ein Knopf zu den festen Projekt-Downloads; kein automatischer Download oder Einbau und keine Spieler-/Sitzungs-/Speicherdaten in der Anfrage.
+- Wiederbeitritt zur letzten Sitzung nach unerwartetem Gast-Verbindungsabbruch ergänzt. Zuerst wird die native Gastwelt geschlossen, dann folgen ein frischer authentifizierter Beitritt und die üblichen Versionsprüfungen. Bewusstes Verlassen löscht das Ziel.
+- Alle neuen Bedienelemente, Hinweise und Anleitungen bleiben auf Deutsch und Englisch verfügbar. Der Installer behält Projekt- und Buy-me-a-Coffee-Link.
+- 0.3.0 erscheint als normale GitHub-Veröffentlichung ohne Pre-release-Kennzeichnung. Ein Rechtesystem wurde nicht ergänzt. Alle müssen 0.3.0 installieren und die Demo neu starten.
+
+Unterstützt wird ausschließlich Find The Needle Demo V66 / Build 25963876 unter Windows. Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
+
 ## 0.2.0 · 2026-10-20
 
 ### English

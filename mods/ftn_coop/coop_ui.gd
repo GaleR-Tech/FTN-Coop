@@ -10,8 +10,27 @@ signal tool_selected(index: int)
 signal copy_report_requested
 signal language_changed
 signal shared_setting_requested(key: String, value: Variant)
+signal marker_kind_selected(kind: String)
+signal preset_save_requested(name: String)
+signal preset_apply_requested(name: String)
+signal preset_delete_requested(name: String)
+signal update_check_requested
+signal rejoin_requested
 
 const ERRORS := {
+	"MARKER_INVALID":"Die Markierung liegt außerhalb der erlaubten Reichweite.",
+	"MARKER_NO_SURFACE":"Schaue auf eine Oberfläche in höchstens 50 Metern Entfernung.",
+	"MARKER_RATE_LIMIT":"Warte kurz, bevor du eine weitere Markierung setzt.",
+	"PRESET_NAME_INVALID":"Gib einen Namen mit 1 bis 32 Zeichen ohne Randabstände oder Steuerzeichen ein.",
+	"PRESET_LIMIT":"Du kannst höchstens 20 Vorlagen speichern. Lösche zuerst eine Vorlage.",
+	"PRESET_MISSING":"Diese Vorlage ist nicht mehr vorhanden.",
+	"PRESET_INVALID":"Die gespeicherten Vorlagen sind beschädigt oder nicht kompatibel.",
+	"PRESET_SAVE_FAILED":"Die Vorlage konnte nicht gespeichert werden. Die bisherige Datei bleibt erhalten.",
+	"UPDATE_CONNECTION":"Die Updateprüfung konnte keine Antwort erhalten. Versuche es später erneut.",
+	"UPDATE_INVALID":"Die Updateantwort war ungültig. Öffne bei Bedarf die Mod-Downloads.",
+	"UPDATE_RATE_LIMITED":"GitHub begrenzt gerade die Anfragen. Versuche es später erneut.",
+	"UPDATE_NO_RELEASE":"Es ist noch keine normale Veröffentlichung verfügbar.",
+	"UPDATE_BUSY":"Warte eine Minute, bevor du erneut nach Updates suchst.",
 	"SETTINGS_INVALID":"Die gemeinsamen Spieleinstellungen sind ungültig. Tritt der Sitzung erneut bei.",
 	"SETTINGS_HOST_ONLY":"Nur der Host kann die gemeinsamen Spieleinstellungen ändern.",
 	"SESSION_FULL":"Die Sitzung ist voll. Maximal vier Spieler können gemeinsam spielen.",
@@ -65,7 +84,9 @@ var _panel: PanelContainer
 var _status: Label
 var _error: Label
 var _hint: Label
-var _roster: Label
+var _roster: VBoxContainer
+var _roster_labels: Dictionary = {}
+var _player_status: Dictionary = {}
 var _host: Button
 var _invite: Button
 var _leave: Button
@@ -98,6 +119,24 @@ var _settings_box: VBoxContainer
 var _settings_hint: Label
 var _settings_controls: Dictionary = {}
 var _session_settings: Dictionary = {}
+var _marker_box: VBoxContainer
+var _marker_selector: OptionButton
+var _preset_name: LineEdit
+var _preset_selector: OptionButton
+var _preset_save: Button
+var _preset_apply: Button
+var _preset_delete: Button
+var _check_update: Button
+var _update_status: Label
+var _update_download: Button
+var _update_result: Dictionary = {}
+var _update_check_ready := true
+var _rejoin_button: Button
+var _rejoin_remembered := false
+var _rejoin_ready := false
+var _marker_feedback: Label
+var _marker_feedback_code := ""
+var _marker_feedback_left := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -108,6 +147,12 @@ func _ready() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	_marker_feedback = Label.new()
+	_marker_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_marker_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_marker_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_marker_feedback.add_theme_color_override("font_color",Color("ffdb99"))
+	root.add_child(_marker_feedback)
 	_badge = Button.new()
 	_badge.text = "Koop · F2"
 	root.add_child(_badge)
@@ -147,12 +192,23 @@ func _ready() -> void:
 	_status = _label(box,"Nicht verbunden · 0 / 4")
 	_progress = _label(box,"")
 	_hint = _label(box,_capability_text)
-	_roster = _label(box,"")
+	_roster = VBoxContainer.new()
+	box.add_child(_roster)
 	_shared = _label(box,"")
 	_host = _button(box,"Sitzung erstellen",func(): host_requested.emit())
 	_invite = _button(box,"Freunde einladen",func(): invite_requested.emit())
 	_save = _button(box,"Gemeinsamen Fortschritt speichern",func(): save_requested.emit())
 	_leave = _button(box,"Sitzung verlassen",func(): leave_requested.emit())
+	_rejoin_button = _button(box,"Letzter Sitzung erneut beitreten",func(): rejoin_requested.emit())
+	_marker_box = VBoxContainer.new()
+	box.add_child(_marker_box)
+	_label(_marker_box,"F3 setzt eine Markierung auf das angeschaute Ziel.")
+	_marker_selector = OptionButton.new()
+	for kind in ["point","build","needle","help"]:
+		_marker_selector.add_item(kind)
+		_marker_selector.set_item_metadata(_marker_selector.item_count-1,kind)
+	_marker_box.add_child(_marker_selector)
+	_marker_selector.item_selected.connect(func(_index: int): marker_kind_selected.emit(selected_marker_kind()))
 	_settings_toggle = _button(box,"Gemeinsame Spieleinstellungen",func(): _refresh_settings())
 	_settings_toggle.toggle_mode = true
 	_settings_box = VBoxContainer.new()
@@ -161,6 +217,16 @@ func _ready() -> void:
 	var labels := {"prop_cap":"Lose Objekte: Maximum","prop_decay":"Lose Objekte automatisch entfernen","belt_cap":"Förderband-Objekte: Maximum","belt_decay":"Förderband-Objekte automatisch entfernen","auto_clean":"Automatisch aufräumen","auto_clean_seconds":"Aufräumintervall (Sekunden)","grid_lock":"Am Bauraster ausrichten","autosave":"Automatisch speichern (Host)","autosave_seconds":"Speicherintervall (Sekunden)"}
 	var schema: Dictionary = load(get_script().resource_path.get_base_dir()+"/shared_settings.gd").SCHEMA
 	for key in schema: _setting_row(key,labels[key],schema[key])
+	_label(_settings_box,"Einstellungsvorlagen")
+	_preset_name = LineEdit.new()
+	_preset_name.max_length = 32
+	_settings_box.add_child(_preset_name)
+	_preset_save = _button(_settings_box,"Vorlage speichern",func(): preset_save_requested.emit(_preset_name.text))
+	_preset_selector = OptionButton.new()
+	_settings_box.add_child(_preset_selector)
+	_preset_selector.item_selected.connect(func(_index: int): _refresh_extra_controls())
+	_preset_apply = _button(_settings_box,"Vorlage anwenden",func(): preset_apply_requested.emit(_selected_preset()))
+	_preset_delete = _button(_settings_box,"Vorlage löschen",func(): preset_delete_requested.emit(_selected_preset()))
 	_actions = VBoxContainer.new()
 	box.add_child(_actions)
 	_error = _label(box,"")
@@ -172,6 +238,12 @@ func _ready() -> void:
 		OS.shell_open(version.DOWNLOAD_URL)
 	)
 	_update.visible = false
+	_check_update = _button(box,"Nach Updates suchen",func(): update_check_requested.emit())
+	_update_status = _label(box,"")
+	_update_download = _button(box,"Mod-Downloads öffnen",func():
+		OS.shell_open(load(get_script().resource_path.get_base_dir()+"/mod_version.gd").DOWNLOAD_URL)
+	)
+	_update_download.visible = false
 	_button(box,"Fehlerbericht kopieren",func(): copy_report_requested.emit())
 	_label(box,"F2 öffnet und schließt dieses Menü.\nEntwicklungsstand · Internettest ausstehend.").add_theme_font_size_override("font_size",13)
 	set_panel_open(false)
@@ -291,6 +363,9 @@ func _refresh_notice() -> void:
 	_notice.text = ""
 	if _notice_kind=="saved": _notice.text = tr_text("Gemeinsamer Fortschritt gespeichert um %s.") % _saved_time
 	elif _notice_kind=="copied": _notice.text = tr_text("Fehlerbericht kopiert. Du kannst ihn vor dem Teilen prüfen.")
+	elif _notice_kind=="preset_saved": _notice.text = tr_text("Vorlage gespeichert.")
+	elif _notice_kind=="preset_applied": _notice.text = tr_text("Vorlage für die Sitzung übernommen.")
+	elif _notice_kind=="preset_deleted": _notice.text = tr_text("Vorlage gelöscht.")
 
 func notice_text() -> String:
 	return _notice.text if _notice!=null else ""
@@ -308,6 +383,104 @@ func set_shared_summary(summary: Dictionary) -> void:
 
 func action_container() -> VBoxContainer:
 	return _actions
+
+func show_preset_notice(kind: String) -> void:
+	clear_error()
+	_notice_kind = "preset_"+kind
+	_refresh_notice()
+
+func selected_marker_kind() -> String:
+	return str(_marker_selector.get_item_metadata(_marker_selector.selected)) if _marker_selector!=null and _marker_selector.selected>=0 else "point"
+
+func current_language() -> String: return _locale.language
+
+func show_marker_feedback(code: String) -> void:
+	_marker_feedback_code = code if ERRORS.has(code) else "MARKER_NO_SURFACE"
+	_marker_feedback_left = 2.5
+
+func set_player_status(rows: Dictionary) -> void:
+	_player_status = rows.duplicate(true)
+	_refresh_roster()
+
+func set_presets(names: Array) -> void:
+	var chosen := _selected_preset()
+	_preset_selector.clear()
+	for name in names:
+		_preset_selector.add_item(str(name))
+		if name==chosen: _preset_selector.select(_preset_selector.item_count-1)
+	_refresh_extra_controls()
+
+func _selected_preset() -> String:
+	return _preset_selector.get_item_text(_preset_selector.selected) if _preset_selector!=null and _preset_selector.selected>=0 else ""
+
+func set_update_result(result: Dictionary) -> void:
+	_update_result = result.duplicate(true)
+	_refresh_update()
+
+func set_update_available(value: bool) -> void:
+	_update_check_ready = value
+	if _check_update!=null: _check_update.disabled = not value
+
+func set_rejoin_available(remembered: bool, enabled: bool) -> void:
+	_rejoin_remembered = remembered
+	_rejoin_ready = enabled
+	_refresh_extra_controls()
+
+func _refresh_update() -> void:
+	if _update_status==null: return
+	_update_status.text = ""
+	_update_download.visible = false
+	if _update_result.is_empty(): return
+	if _update_result.get("code")=="CHECKING":
+		_update_status.text = tr_text("Suche nach Updates …")
+	elif not _update_result.get("ok",false):
+		_update_status.text = tr_text(ERRORS.get(_update_result.get("code"),ERRORS.UPDATE_CONNECTION))
+	else:
+		var value: Dictionary = _update_result.value
+		var messages := {"newer":"Neue Version verfügbar: %s","current":"Deine Mod ist aktuell: %s","older":"Die veröffentlichte Version %s ist älter als deine installierte Mod."}
+		_update_status.text = tr_text(messages.get(value.status,"Deine Mod ist aktuell: %s")) % str(value.version)
+		_update_download.visible = value.status=="newer"
+
+func _refresh_extra_controls() -> void:
+	if _preset_name==null: return
+	var playing: bool = _session!=null and _session.state==_session.State.PLAYING and not _closing
+	var host: bool = playing and _session.is_host and not _session_settings.is_empty()
+	_preset_name.editable = host
+	_preset_name.placeholder_text = tr_text("Name der Vorlage")
+	_preset_selector.disabled = not host or _preset_selector.item_count==0
+	_preset_save.disabled = not host
+	_preset_apply.disabled = not host or _selected_preset().is_empty()
+	_preset_delete.disabled = not host or _selected_preset().is_empty()
+	_marker_box.visible = playing
+	var titles := ["Markierung","Hier bauen","Hier liegt eine Nadel","Hilfe"]
+	for i in range(4): _marker_selector.set_item_text(i,tr_text(titles[i]))
+	_rejoin_button.visible = _rejoin_remembered and (_session==null or _session.state==_session.State.OFFLINE)
+	_rejoin_button.disabled = not _rejoin_ready or _closing
+	_refresh_update()
+
+func _refresh_roster() -> void:
+	if _roster==null: return
+	var members: Dictionary = _session.roster if _session!=null else {}
+	for old in _roster_labels.keys():
+		if not members.has(old):
+			_roster.remove_child(_roster_labels[old])
+			_roster_labels[old].queue_free()
+			_roster_labels.erase(old)
+	var peers: Array = members.keys()
+	peers.sort()
+	var colors: Script = load(get_script().resource_path.get_base_dir()+"/player_colors.gd")
+	var states := {"connecting":"Verbinden …","waiting":"Wird geladen","receiving":"Wird geladen","loading":"Wird geladen","syncing":"Wird abgeglichen","catching_up":"Wird abgeglichen","playing":"Spielt"}
+	for peer in peers:
+		if not _roster_labels.has(peer): _roster_labels[peer] = _label(_roster,"")
+		var member: Dictionary = members[peer]
+		var status: Dictionary = _player_status.get(peer,{})
+		var state: String = status.get("state",member.get("state","connecting"))
+		var latency: int = status.get("latency_ms",-1)
+		var connection := tr_text("Host") if peer==1 else (str(latency)+" ms" if latency>=0 else tr_text("Messung ausstehend"))
+		var display_name: String = str(member.get("name",tr_text("Mitspieler"))).left(64)
+		if not member.get("accepted",false) and display_name=="Verbinden …": display_name = tr_text("Verbinden …")
+		_roster_labels[peer].text = display_name+" · "+tr_text(states.get(state,"Verbinden …"))+" · "+connection
+		_roster_labels[peer].add_theme_color_override("font_color",colors.for_peer(peer,members))
 
 func _setting_row(key: String, title: String, rule: Array) -> void:
 	var row := HBoxContainer.new()
@@ -337,6 +510,7 @@ func set_shared_settings(values: Dictionary) -> void:
 
 func _refresh_settings() -> void:
 	if _settings_toggle==null: return
+	_refresh_extra_controls()
 	var active: bool = _session!=null and _session.state!=_session.State.OFFLINE and not _session_settings.is_empty()
 	_settings_toggle.visible = active
 	_settings_box.visible = active and _settings_toggle.button_pressed
@@ -370,13 +544,7 @@ func _refresh() -> void:
 	_leave.visible = not offline
 	_actions.visible = playing and not hosting
 	_hint.text = tr_text(_capability_text if offline else ("Du bist Host. Der gemeinsame Fortschritt gehört zu deinem Spielstand." if hosting else "Du spielst in der Welt des Hosts. Dein Einzelspielerstand bleibt getrennt."))
-	var lines := PackedStringArray()
-	if _session!=null:
-		for peer in _session.roster:
-			var member: Dictionary = _session.roster[peer]
-			var display_name: String = tr_text("Verbinden …") if member.get("state")=="connecting" and not member.get("accepted",false) else str(member.get("name",tr_text("Mitspieler")))
-			lines.append("• "+display_name)
-	_roster.text = "\n".join(lines)
+	_refresh_roster()
 	if _closing:
 		_status.text = tr_text("Gastwelt wird geschlossen …")
 		_hint.text = tr_text("Warte, bis das Hauptmenü wieder bereit ist.")
@@ -411,6 +579,11 @@ func _process(_delta: float) -> void:
 	_panel.size = Vector2(width,maxf(120,minf(640,viewport.y-112)))
 	_badge.position = Vector2(maxf(12,viewport.x-222),maxf(12,viewport.y-44))
 	_badge.size = Vector2(210,32)
+	_marker_feedback_left = maxf(0.0,_marker_feedback_left-_delta)
+	_marker_feedback.visible = _marker_feedback_left>0 and not is_panel_open()
+	_marker_feedback.text = tr_text(ERRORS.get(_marker_feedback_code,""))
+	_marker_feedback.position = Vector2(maxf(12,viewport.x*0.5-240),maxf(12,viewport.y-100))
+	_marker_feedback.size = Vector2(minf(480,viewport.x-24),52)
 
 func _label(parent: Node, text: String) -> Label:
 	var label := Label.new()

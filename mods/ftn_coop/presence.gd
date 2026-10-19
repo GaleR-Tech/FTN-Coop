@@ -15,6 +15,7 @@ func sync_roster(local_peer: int, roster: Dictionary) -> void:
 			add_child(avatar)
 			avatars[peer] = avatar
 		avatars[peer].set_display_name(str(roster[peer].get("name","Mitspieler")))
+		avatars[peer].set_display_color(load(get_script().resource_path.get_base_dir()+"/player_colors.gd").for_peer(peer,roster))
 
 func apply_pose(peer: int, pose: Dictionary) -> void:
 	if avatars.has(peer): avatars[peer].apply_pose(pose)

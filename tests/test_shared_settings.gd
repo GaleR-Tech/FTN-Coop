@@ -91,7 +91,7 @@ func _settings_wire(tree: SceneTree) -> Array[String]:
 		var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 		tree.root.add_child(wire)
 		tree.root.add_child(controller)
-		controller.configure(wire,game,"25963876","0.2.0")
+		controller.configure(wire,game,"25963876","0.3.0")
 		configs.append(cfg)
 		games.append(game)
 		wires.append(wire)

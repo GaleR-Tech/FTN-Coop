@@ -97,7 +97,7 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
         $loadDeadline = (Get-Date).AddSeconds(120)
         while ((Get-Date) -lt $loadDeadline) {
             $loadedReport = Read-NativeReport $nativeNames[$nativeIndex]
-            if ($null -ne $loadedReport -and ($loadedReport.stage -eq 'dig_done' -or ($nativeIndex -eq 0 -and $loadedReport.revision -ge 0) -or $loadedReport.status -eq 'FAIL')) { break }
+            if ($null -ne $loadedReport -and ($loadedReport.stage -in @('dig_done','collab_ready') -or ($nativeIndex -eq 0 -and $loadedReport.revision -ge 0) -or $loadedReport.status -eq 'FAIL')) { break }
             Start-Sleep -Milliseconds 200
         }
     }
@@ -105,7 +105,7 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
 } finally { [Environment]::SetEnvironmentVariable('FTN_COOP_TEST_OUTPUT',$previousTestOutput,'Process') }
 @{ run_id=$nativeRunId; players=$Players; process_ids=@($nativeProcesses | ForEach-Object { $_.Id }); game_copies=$nativeCopyRunRoot; private_profiles=$privateUserRoots; log_dir=$nativeLogDir; reports=$nativeReportDir; started=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'request.json')
 Write-Output "Started $Players native demo processes. Comparing per-revision shared-world hashes."
-$nativeDeadline = (Get-Date).AddSeconds($(if ($Players -eq 4) { 200 } else { 100 }))
+$nativeDeadline = (Get-Date).AddSeconds($(if ($Presence) { if ($Players -eq 4) { 300 } else { 180 } } elseif ($Players -eq 4) { 200 } else { 100 }))
 $nativeReports = @{}
 $nativeAgreement = @{ ok=$false; mismatch=$false; counts=@{} }
 $nativeFailure = ''

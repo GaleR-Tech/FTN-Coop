@@ -1,4 +1,4 @@
-# FTN-Koop · 0.2.0
+# FTN-Koop · 0.3.0
 
 [English](README.en.md) · Deutsch
 
@@ -45,7 +45,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.2.0-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.3.0-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -127,6 +127,43 @@ der Gastsitzung geänderte persönliche Optionen werden beim normalen Verlassen 
 Schließen der Demo gespeichert; bei erzwungenem Beenden können diese letzten
 persönlichen Änderungen verloren gehen. Vorübergehende Host-Werte werden nicht in
 die persönliche Einstellungsdatei des Gastes geschrieben.
+
+## Markierungen, Spielerstatus und Wiederbeitritt
+
+Neu in **0.3.0**: **F3** markiert beim Spielen die angeschaute Oberfläche in
+höchstens 50 Metern Entfernung. In F2 wählst du **Markierung**, **Hier bauen**,
+**Hier liegt eine Nadel** oder **Hilfe**. Jeder Spieler hat eine Markierung,
+die 20 Sekunden sichtbar bleibt; eine neue ersetzt die vorherige. Markierungen,
+Spielernamen und Figuren verwenden passende Spielerfarben. In Menüs, bei
+Texteingaben und beim Laden einer Welt setzt F3 keine Markierung.
+
+Die F2-Spielerliste zeigt Laden/Abgleichen/Spielen und die gemessene Antwortzeit
+in Millisekunden. Fehlende Messungen werden als nicht verfügbar angezeigt;
+der lokale Host steht als **Host** in der Liste. Die Messung enthält auch die
+Verarbeitungszeit des Spiels.
+
+Nach einem unerwarteten Abbruch bietet **Letzter Sitzung erneut beitreten** einen
+frischen Beitritt an, sobald die alte Gastwelt geschlossen ist. Der Host muss
+dieselbe Sitzung noch geöffnet haben. Bewusstes Verlassen und das Schließen der
+Demo löschen das gemerkte Ziel. Beim Wiederbeitritt wird die aktuelle Host-Welt
+geladen; deine vorherige Position ist nicht garantiert.
+
+## Einstellungsvorlagen und Updateprüfung
+
+Der Host kann unter F2 → **Gemeinsame Spieleinstellungen** benannte Vorlagen
+speichern, anwenden und löschen. Bis zu 20 Vorlagen speichern ausschließlich
+die neun gemeinsamen Spielwerte lokal auf diesem Rechner. Beim Anwenden übernehmen
+alle Gäste die Werte; persönliche Grafik-, Ton- und Steuerungswerte bleiben getrennt.
+
+**Nach Updates suchen** fragt erst nach deinem Klick den öffentlichen
+GitHub-Releases-Dienst ab. Bei einer neueren normalen Veröffentlichung führt
+ein Knopf zu den Mod-Downloads. Die Prüfung lädt oder installiert nichts.
+Abfragen sind einmal pro Minute möglich; ohne Verbindung oder bei einem
+Anfragelimit bleibt das Spiel benutzbar. Spielernamen, Steam-IDs, Lobbykennungen,
+lokale Pfade, Fehlerberichte und Spielstände werden nicht mitgeschickt.
+
+0.3.0 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
+getrennten Steam-Konten bleibt unbestätigt.
 
 ## Speichern und Verlassen
 
