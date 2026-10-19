@@ -2,13 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.1.3 · Demo build 25963876 · Updated 19 October 2026.
+Version 0.1.4 · Demo build 25963876 · Updated 19 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
 - [ ] Both use Windows, the same demo build and the same mod package.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.1.4 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -21,6 +22,7 @@ Internet verification below. No one has been contacted or invited automatically.
 - [ ] The host saves, exits and reloads; progress is retained.
 - [ ] The guest's previous single-player save remains unchanged.
 - [ ] The host closes the session; the guest receives an understandable message and returns to the menu.
+- [ ] An expired invitation and a full lobby show the correct reason in German and English. Copy the error report and check that its error code matches the failure.
 
 ## Then, four people
 

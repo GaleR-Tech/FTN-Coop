@@ -39,6 +39,13 @@ func run(tree: SceneTree) -> Array[String]:
 		ui.set_language("de")
 		if not ui.notice_text().contains("gespeichert") or session.state!=session.State.SYNCING or session.roster.size()!=2:
 			errors.append("Language switching must preserve session and saved-notice state.")
+		for code in ["STEAM_BUSY","STEAM_TIMEOUT","CONNECTION_TIMEOUT","LOBBY_JOIN_FAILED","LOBBY_CREATE_FAILED","HOST_CREATE_FAILED","CLIENT_CREATE_FAILED","SEND_FAILED","RESYNC_FAILED","LOBBY_NOT_FOUND","LOBBY_NOT_ALLOWED","LOBBY_ACCOUNT_LIMITED","LOBBY_BLOCKED","LOBBY_RATE_LIMITED"]:
+			ui.set_language("de")
+			ui.show_error(code)
+			var german: String = ui.error_text()
+			ui.set_language("en")
+			if ui._error_code!=code or not ui.diagnostic_report().contains(code) or german.is_empty() or ui.error_text()==german:
+				errors.append("Network failure "+code+" must have a translated action and retain its real diagnostic code.")
 	var settings := "user://ftn-locale-test-"+str(Time.get_ticks_usec())+".cfg"
 	locale.set_language("de")
 	if locale.save_preferences(settings)!=OK: errors.append("Language preference could not be saved.")

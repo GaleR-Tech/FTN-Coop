@@ -1,4 +1,4 @@
-# FTN-Coop · 0.1.3
+# FTN-Coop · 0.1.4
 
 English · [Deutsch](README.de.md)
 
@@ -47,7 +47,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.1.3-Setup.exe**:
+The easiest option is **FTN-Coop-0.1.4-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -76,6 +76,11 @@ Installation adds the mod's own files under `mods/ftn_coop` and an entry in
 settings and other mod files into account.
 
 ## Play with friends
+
+New in 0.1.4: A missing host response, missing initial world data or a stalled
+final synchronization now ends with a clear timeout instead of an endless loading
+screen. Steam errors explain closed/full lobbies, account restrictions and repeated
+join attempts in both languages. The report preserves the specific error code.
 
 When you join, the F2 menu shows the actual proportion of world data received,
 followed by separate world construction and progress synchronization stages.

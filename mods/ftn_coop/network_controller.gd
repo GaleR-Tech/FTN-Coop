@@ -32,6 +32,7 @@ var _resync_attempts := 0
 var _world_retries: Dictionary = {}
 var version_mismatch: Dictionary = {}
 var _mod_version := ""
+var _sync_wait := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -92,6 +93,7 @@ func leave() -> void:
 	_resync_pending = false
 	_resync_attempts = 0
 	_sequence = 0
+	_sync_wait = 0.0
 	_receiver.cancel()
 	load_progress.emit("idle",0,0)
 	session.leave()
@@ -113,7 +115,9 @@ func request_action(kind: String, payload: Dictionary) -> Dictionary:
 func _on_state_changed() -> void:
 	if _leaving: return
 	if not session.is_host:
-		if session.state==session.State.SYNCING: load_progress.emit("waiting",0,0)
+		if session.state==session.State.SYNCING:
+			_sync_wait = 0.0
+			load_progress.emit("waiting",0,0)
 		elif session.state==session.State.PLAYING: load_progress.emit("ready",0,0)
 	if session.is_host and session.state==session.State.LOBBY:
 		world_sync.configure(_adapter,true)
@@ -137,6 +141,11 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 
 func _process(delta: float) -> void:
 	if session==null or _leaving: return
+	if not session.is_host and session.state==session.State.SYNCING and not _loading:
+		_sync_wait += delta
+		if _sync_wait >= (15.0 if connection_id.is_empty() else 120.0):
+			_fail("CONNECT_TIMEOUT" if connection_id.is_empty() else "TRANSFER_TIMEOUT")
+			return
 	_poll_due += delta
 	_pose_due += delta
 	if session.state==session.State.PLAYING:
@@ -234,6 +243,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				_fail(welcomed.code)
 			return
 		connection_id = body._connection
+		_sync_wait = 0.0
 		_receiver.configure(session.session_id)
 		return
 	if message.session!=session.session_id or body.get("_connection")!=connection_id or connection_id.is_empty(): return
@@ -242,7 +252,9 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 			if message.type=="SNAPSHOT_BEGIN": _resync_pending = false
 			var received: Dictionary = _receiver.receive(1,body)
 			if not received.ok and received.code not in ["STALE_REVISION","TRANSFER_MISMATCH"]: _request_resync()
-		"EVENT": world_sync.accept_event(1,body)
+		"EVENT":
+			var applied: Dictionary = world_sync.accept_event(1,body)
+			if applied.ok: _sync_wait = 0.0
 		"WORLD_READY":
 			if body.get("stage")=="caught_up" and body.get("revision")==world_sync.revision:
 				_resync_attempts = 0
@@ -291,6 +303,7 @@ func _start_world(peer: int) -> void:
 			break
 
 func _on_transfer_progress(received: int, total: int) -> void:
+	_sync_wait = 0.0
 	if not session.is_host and session.state==session.State.SYNCING and not _baseline_received:
 		load_progress.emit("receiving",received,total)
 
@@ -307,6 +320,7 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	var restored: Dictionary = await save_session.open_guest(state.native,session.session_id)
 	if epoch!=_epoch: return
 	_loading = false
+	_sync_wait = 0.0
 	if not restored.ok:
 		_fail(restored.code)
 		return

@@ -8,7 +8,7 @@ signal message_received(peer_id: int, channel: int, bytes: PackedByteArray)
 signal invite_received(lobby_id: int)
 
 var build := "25963876"
-var mod_version := "0.1.3"
+var mod_version := "0.1.4"
 var lobby_id := 0
 var _steam: Object
 var _peer: MultiplayerPeer
@@ -21,6 +21,7 @@ var _hosting := false
 var _wired := false
 var _connecting_time := 0.0
 var _version_mismatch: Dictionary = {}
+var _polling := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -89,9 +90,12 @@ func reject_peer(peer_id: int) -> void:
 
 func close() -> void:
 	_generation += 1
-	if _peer != null:
-		_peer.close()
-		_peer = null
+	var closing_peer := _peer
+	_peer = null
+	if closing_peer != null:
+		# The SDK may emit disconnect while polling; close after its call returns.
+		if _polling: closing_peer.close.call_deferred()
+		else: closing_peer.close()
 	if _steam != null and is_instance_valid(_steam) and lobby_id != 0:
 		_steam.call("leaveLobby", lobby_id)
 	lobby_id = 0
@@ -167,8 +171,9 @@ func _on_lobby_joined(joined_lobby: int, _permissions: int, _locked: bool, respo
 			_steam.call("leaveLobby", joined_lobby)
 		return
 	if response != 1:
-		# Steam EChatRoomEnterResponseFull = 4.
-		_fail("SESSION_FULL" if response==4 else "LOBBY_JOIN_FAILED")
+		# Steamworks EChatRoomEnterResponse; keep a useful reason for the UI.
+		var reasons := {2:"LOBBY_NOT_FOUND",3:"LOBBY_NOT_ALLOWED",4:"SESSION_FULL",6:"LOBBY_NOT_ALLOWED",7:"LOBBY_ACCOUNT_LIMITED",9:"LOBBY_NOT_ALLOWED",10:"LOBBY_BLOCKED",11:"LOBBY_BLOCKED",15:"LOBBY_RATE_LIMITED"}
+		_fail(reasons.get(response,"LOBBY_JOIN_FAILED"))
 		return
 	lobby_id = joined_lobby
 	if str(_steam.call("getLobbyData", lobby_id, "ftn_coop_protocol")) != "1":
@@ -220,8 +225,11 @@ func _process(delta: float) -> void:
 			_fail("STEAM_TIMEOUT")
 	if _peer == null:
 		return
-	_peer.poll()
-	if _peer==null: return # A disconnect callback can close it during poll.
+	var polled_peer := _peer
+	_polling = true
+	polled_peer.poll()
+	_polling = false
+	if _peer!=polled_peer: return # A disconnect callback can close or replace it.
 	if not _hosting:
 		if _peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTING:
 			_connecting_time += delta

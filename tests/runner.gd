@@ -13,6 +13,7 @@ const SUITES := {
 	"world_sync": "res://tests/test_world_sync.gd",
 	"loose_sync": "res://tests/test_loose_sync.gd",
 	"network_controller": "res://tests/test_network_controller.gd",
+	"network_recovery": "res://tests/test_network_recovery.gd",
 	"actor_lifecycle": "res://tests/test_actor_lifecycle.gd",
 	"local_transport": "res://tests/test_local_transport.gd",
 	"native_diagnostics": "res://tests/test_native_diagnostics.gd",

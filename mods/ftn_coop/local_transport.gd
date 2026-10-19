@@ -14,6 +14,7 @@ var _host := false
 var _epoch := 0
 var _waiting := 0.0
 var _peers: Dictionary = {}
+var _polling := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -79,16 +80,23 @@ func reject_peer(peer: int) -> void:
 
 func close() -> void:
 	_epoch += 1
-	if _peer!=null: _peer.close()
+	var closing_peer := _peer
 	_peer = null
+	if closing_peer!=null:
+		# Disconnect callbacks can run inside ENet poll; release its native host later.
+		if _polling: closing_peer.close.call_deferred()
+		else: closing_peer.close()
 	_host = false
 	_peers.clear()
 	_waiting = 0.0
 
 func _process(delta: float) -> void:
 	if _peer==null: return
-	_peer.poll()
-	if _peer==null: return # A callback can close the session while polling.
+	var polled_peer := _peer
+	_polling = true
+	polled_peer.poll()
+	_polling = false
+	if _peer!=polled_peer: return # A callback can close or replace the session.
 	var status := _peer.get_connection_status()
 	if not _host and status!=MultiplayerPeer.CONNECTION_CONNECTED:
 		_waiting += delta

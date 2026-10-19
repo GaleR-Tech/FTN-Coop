@@ -1,4 +1,4 @@
-# FTN-Koop · 0.1.3
+# FTN-Koop · 0.1.4
 
 [English](README.en.md) · Deutsch
 
@@ -45,7 +45,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.1.3-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.1.4-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -71,6 +71,12 @@ in `override.cfg`. Originale EXE/PCK bleiben unverändert. Bestehende Einstellun
 und andere Mod-Dateien werden bei der Entfernung berücksichtigt.
 
 ## Mit Freunden spielen
+
+Neu in 0.1.4: Eine fehlende Host-Antwort, ausbleibende erste Weltdaten oder ein
+festhängender abschließender Abgleich enden jetzt mit einer klaren Zeitüberschreitung
+statt eines endlosen Ladebildschirms. Steam-Fehler erklären geschlossene/volle
+Lobbys, Kontoeinschränkungen und zu viele Beitrittsversuche in beiden Sprachen.
+Der Fehlerbericht behält den konkreten Fehlercode.
 
 Beim Beitritt zeigt das F2-Menü den tatsächlich empfangenen Anteil
 der Weltdaten und anschließend getrennt den Weltaufbau und Fortschrittsabgleich.

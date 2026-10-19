@@ -1,12 +1,13 @@
 # FTN-Koop · Internettest noch offen
 
-Version 0.1.3 · Demo-Build 25963876 · Stand 19.10.2026.
+Version 0.1.4 · Demo-Build 25963876 · Stand 19.10.2026.
 Lokale echte Demo-Prozesse sind getrennt vom folgenden Internetnachweis zu bewerten.
 Niemand wurde automatisch angeschrieben oder eingeladen.
 
 ## Zuerst zwei Personen
 
 - [ ] Beide verwenden Windows, denselben Demo-Build und dasselbe Mod-Paket.
+- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.1.4 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
 - [ ] Beide starten über Steam mit verschiedenen Konten an verschiedenen Rechnern
       und Internetanschlüssen; Steam-Overlay ist verfügbar.
 - [ ] Host lädt einen eigenen Teststand, erstellt eine private Sitzung und lädt ein.
@@ -19,6 +20,7 @@ Niemand wurde automatisch angeschrieben oder eingeladen.
 - [ ] Host speichert, beendet und lädt neu; Fortschritt bleibt erhalten.
 - [ ] Der vorherige Einzelspielerstand des Gastes bleibt unverändert.
 - [ ] Host schließt die Sitzung; Gast erhält eine verständliche Meldung und kommt ins Menü.
+- [ ] Eine abgelaufene Einladung und eine volle Lobby zeigen den passenden Grund auf Deutsch und Englisch. Im kopierten Fehlerbericht steht der passende Fehlercode.
 
 ## Danach vier Personen
 

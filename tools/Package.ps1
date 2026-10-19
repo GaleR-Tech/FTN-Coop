@@ -18,7 +18,7 @@ Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $outputRoot = Join-Path $projectRoot 'dist'
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
-$archivePath = Join-Path $outputRoot 'FTN-Coop-0.1.3.zip'
+$archivePath = Join-Path $outputRoot 'FTN-Coop-0.1.4.zip'
 $temporaryPath = $archivePath+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
 try {
     $archive = [IO.Compression.ZipFile]::Open($temporaryPath,[IO.Compression.ZipArchiveMode]::Create)
@@ -32,5 +32,5 @@ try {
 }
 finally { if (Test-Path -LiteralPath $temporaryPath) { Remove-Item -LiteralPath $temporaryPath } }
 $digest = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-[IO.File]::WriteAllText($archivePath+'.sha256',$digest+'  FTN-Coop-0.1.3.zip'+[Environment]::NewLine)
+[IO.File]::WriteAllText($archivePath+'.sha256',$digest+'  FTN-Coop-0.1.4.zip'+[Environment]::NewLine)
 Write-Output ('Paket erstellt: '+$archivePath+' ('+$files.Count+' Dateien)')

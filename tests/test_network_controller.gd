@@ -19,8 +19,8 @@ func run(tree: SceneTree) -> Array[String]:
 	var host: Node = module.new()
 	var guest: Node = module.new()
 	for node in [host_wire,guest_wire,host,guest]: tree.root.add_child(node)
-	host.configure(host_wire,host_game,"25963876","0.1.3")
-	guest.configure(guest_wire,guest_game,"25963876","0.1.3")
+	host.configure(host_wire,host_game,"25963876","0.1.4")
+	guest.configure(guest_wire,guest_game,"25963876","0.1.4")
 	var stages: Array[String] = []
 	if guest.has_signal("load_progress"):
 		guest.load_progress.connect(func(stage: String, _received: int, _total: int): stages.append(stage))
@@ -97,7 +97,7 @@ func _four_socket_peers(tree: SceneTree) -> Array[String]:
 		var controller: Node = module.new()
 		tree.root.add_child(wire)
 		tree.root.add_child(controller)
-		controller.configure(wire,game,"25963876","0.1.3")
+		controller.configure(wire,game,"25963876","0.1.4")
 		wires.append(wire)
 		games.append(game)
 		controllers.append(controller)
@@ -119,6 +119,34 @@ func _four_socket_peers(tree: SceneTree) -> Array[String]:
 		if controllers[0].session.roster.size()!=4: errors.append("Real sockets must retain exactly four admitted participants.")
 		for index in [1,2,3]:
 			if games[index].world!=games[0].world: errors.append("Every socket replica must match shared money and production after late join.")
+		var departed: int = wires[2].local_peer_id()
+		controllers[2].leave()
+		await tree.create_timer(0.1).timeout
+		if controllers[0].session.roster.size()!=3 or controllers[0].session.roster.has(departed):
+			errors.append("A departing guest must release exactly its own slot over real sockets.")
+		for index in [0,1,3]:
+			if controllers[index].session.state!=controllers[index].session.State.PLAYING:
+				errors.append("One guest leaving must keep the other three participants playing.")
+		games[0].produce()
+		controllers[0].world_sync.poll()
+		controllers[2].join(1)
+		if not await _await_playing(tree,[controllers[2]]):
+			errors.append("A guest must be able to rejoin the same real-socket session.")
+		await tree.create_timer(0.1).timeout
+		if controllers[0].session.roster.size()!=4:
+			errors.append("A rejoining guest must occupy one slot without retaining its old connection.")
+		for index in [1,2,3]:
+			if games[index].world!=games[0].world: errors.append("Rejoining must restore the host's latest shared world for every participant.")
+		var disconnected: Array = []
+		for index in [1,2,3]:
+			controllers[index].problem.connect(func(code: String): disconnected.append(code))
+		controllers[0].leave()
+		await tree.create_timer(0.1).timeout
+		if disconnected!=["HOST_LEFT","HOST_LEFT","HOST_LEFT"]:
+			errors.append("Ending the host session must tell each of the three socket guests why it ended.")
+		for index in [1,2,3]:
+			if controllers[index].session.state!=controllers[index].session.State.OFFLINE or controllers[index].save_session.guest_open:
+				errors.append("Host departure must close every temporary guest world and release its session.")
 	for controller in controllers:
 		controller.leave()
 		controller.queue_free()

@@ -1,5 +1,27 @@
 # Changelog / Änderungen
 
+## 0.1.4 · 2026-10-19
+
+### English
+
+- Fixed a disconnect crash: a native network peer is now closed after its active poll has returned. Covered by real four-participant socket leave/rejoin and host-departure checks.
+- Guests time out when the host never sends a welcome, initial world data or final synchronization confirmation. Valid received data and confirmed catch-up events renew the new wait budget; native world construction is excluded from it. Existing world-transfer limits remain unchanged.
+- Steam lobby failures now distinguish closed, full, restricted and blocked sessions, account limitations and too many join attempts.
+- Added German/English messages for connection, Steam, send and synchronization failures. Copied reports retain the specific known error code.
+- Expanded automated recovery, retry, synchronization and disconnect coverage. Everyone must install 0.1.4 together; exact mod-version checks remain in place.
+
+Only Find The Needle Demo V66 / build 25963876 on Windows is supported. Internet play between different Steam accounts remains unverified.
+
+### Deutsch
+
+- Absturz beim Verbindungsabbau behoben: Eine native Netzwerkverbindung wird erst geschlossen, nachdem ihre laufende Verarbeitung zurückgekehrt ist. Durch lokale Socket-Prüfungen mit vier Teilnehmern für Verlassen, Wiederbeitritt und Host-Ende abgedeckt.
+- Gäste erhalten eine Zeitüberschreitung, wenn der Host keine Begrüßung, ersten Weltdaten oder abschließende Abgleichbestätigung sendet. Gültige empfangene Daten und bestätigte Abgleichereignisse erneuern die neue Wartefrist; der native Weltaufbau wird darin nicht mitgezählt. Bestehende Übertragungsgrenzen bleiben unverändert.
+- Steam-Lobbyfehler unterscheiden jetzt geschlossene, volle, eingeschränkte und blockierte Sitzungen, Kontoeinschränkungen und zu viele Beitrittsversuche.
+- Deutsche/englische Meldungen für Verbindungs-, Steam-, Sende- und Abgleichfehler ergänzt. Kopierte Berichte behalten den konkreten bekannten Fehlercode.
+- Automatische Prüfungen für Wiederherstellung, erneute Versuche, Synchronisierung und Verbindungsabbrüche erweitert. Alle müssen gemeinsam 0.1.4 installieren; die exakte Mod-Versionsprüfung bleibt bestehen.
+
+Unterstützt wird ausschließlich Find The Needle Demo V66 / Build 25963876 unter Windows. Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
+
 ## 0.1.3 · 2026-10-19
 
 ### English
