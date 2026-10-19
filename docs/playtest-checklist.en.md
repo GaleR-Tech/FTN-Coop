@@ -2,14 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.1.4 · Demo build 25963876 · Updated 19 October 2026.
+Version 0.2.0 · Demo build 25963876 · Updated 20 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
 - [ ] Both use Windows, the same demo build and the same mod package.
-- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.1.4 and restart, joining can be retried.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.2.0 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -25,6 +25,11 @@ Internet verification below. No one has been contacted or invited automatically.
 - [ ] An expired invitation and a full lobby show the correct reason in German and English. Copy the error report and check that its error code matches the failure.
 
 ## Then, four people
+
+- [ ] Guests begin with different personal gameplay settings. After joining, all nine F2 shared values match the host; guest controls are disabled.
+- [ ] The host changes the object limit and cleanup interval in F2; all guests receive the new values without rejoining.
+- [ ] Graphics, audio, language and controls remain personal. After normal leave or host loss, each guest's original gameplay values are restored and personal changes are saved.
+- [ ] Cancel a join during loading and retry; shared settings apply again and the original personal values remain recoverable.
 
 - [ ] Three guests join through Steam; all four players see the correct participants.
 - [ ] Simultaneous work and machine production remain synchronized for several minutes.

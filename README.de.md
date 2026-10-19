@@ -1,4 +1,4 @@
-# FTN-Koop · 0.1.4
+# FTN-Koop · 0.2.0
 
 [English](README.en.md) · Deutsch
 
@@ -45,7 +45,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.1.4-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.2.0-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -108,6 +108,25 @@ Nadeln am passenden Schrank abgeben; Maschinen und Gebäude müssen in Reichweit
 Alle Teilnehmer müssen exakt dieselbe Mod-Version und denselben Demo-Build verwenden. Abweichende Mod-Versionen werden vor dem Laden der Welt abgewiesen. Im F2-Menü stehen die installierte und die von der Lobby benötigte Version sowie **Mod-Downloads öffnen**. Alle sollten dasselbe Paket installieren und die Demo neu starten; das gilt auch, wenn der Host eine ältere Version hat.
 Verbindungen sind für Steam-Relays vorgesehen; eine Portfreigabe am Router
 gehört nicht zur Einrichtung.
+
+## Gemeinsame Spieleinstellungen
+
+Neu in **0.2.0**: Über F2 → **Gemeinsame Spieleinstellungen** ändert der Host die
+Werte für die gesamte Sitzung. Gäste sehen die aktuellen Werte mit **Vom Host
+vorgegeben**; ihre Bedienelemente sind gesperrt. Änderungen werden während des
+Spielens abgeglichen, beim Beitritt bereits vor dem Weltaufbau übernommen.
+
+Gemeinsam gelten Objektgrenzen und automatisches Entfernen für lose Objekte und
+Förderband-Inhalte, automatisches Aufräumen samt Intervall, das Ausrichten am
+Bauraster und das automatische Speichern samt Intervall beim Host. Nur der Host
+speichert die gemeinsame Welt.
+
+Die eigenen Spielwerte des Gastes werden beim Verlassen, Abbrechen und Host-Verlust
+wiederhergestellt. Grafik, Ton, Sprache und Steuerung bleiben individuell. Während
+der Gastsitzung geänderte persönliche Optionen werden beim normalen Verlassen oder
+Schließen der Demo gespeichert; bei erzwungenem Beenden können diese letzten
+persönlichen Änderungen verloren gehen. Vorübergehende Host-Werte werden nicht in
+die persönliche Einstellungsdatei des Gastes geschrieben.
 
 ## Speichern und Verlassen
 

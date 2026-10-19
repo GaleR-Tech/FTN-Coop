@@ -9,8 +9,11 @@ signal action_requested(kind: String, payload: Dictionary)
 signal tool_selected(index: int)
 signal copy_report_requested
 signal language_changed
+signal shared_setting_requested(key: String, value: Variant)
 
 const ERRORS := {
+	"SETTINGS_INVALID":"Die gemeinsamen Spieleinstellungen sind ungültig. Tritt der Sitzung erneut bei.",
+	"SETTINGS_HOST_ONLY":"Nur der Host kann die gemeinsamen Spieleinstellungen ändern.",
 	"SESSION_FULL":"Die Sitzung ist voll. Maximal vier Spieler können gemeinsam spielen.",
 	"BUILD_MISMATCH":"Die Spiel-Version stimmt nicht überein. Alle benötigen dieselbe Demo-Version.",
 	"MOD_MISMATCH":"Die Koop-Version stimmt nicht überein. Installiert dasselbe Mod-Paket.",
@@ -90,6 +93,11 @@ var _summary: Dictionary = {}
 var _update: Button
 var _version_label: Label
 var _required_version := ""
+var _settings_toggle: Button
+var _settings_box: VBoxContainer
+var _settings_hint: Label
+var _settings_controls: Dictionary = {}
+var _session_settings: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -145,6 +153,14 @@ func _ready() -> void:
 	_invite = _button(box,"Freunde einladen",func(): invite_requested.emit())
 	_save = _button(box,"Gemeinsamen Fortschritt speichern",func(): save_requested.emit())
 	_leave = _button(box,"Sitzung verlassen",func(): leave_requested.emit())
+	_settings_toggle = _button(box,"Gemeinsame Spieleinstellungen",func(): _refresh_settings())
+	_settings_toggle.toggle_mode = true
+	_settings_box = VBoxContainer.new()
+	box.add_child(_settings_box)
+	_settings_hint = _label(_settings_box,"")
+	var labels := {"prop_cap":"Lose Objekte: Maximum","prop_decay":"Lose Objekte automatisch entfernen","belt_cap":"Förderband-Objekte: Maximum","belt_decay":"Förderband-Objekte automatisch entfernen","auto_clean":"Automatisch aufräumen","auto_clean_seconds":"Aufräumintervall (Sekunden)","grid_lock":"Am Bauraster ausrichten","autosave":"Automatisch speichern (Host)","autosave_seconds":"Speicherintervall (Sekunden)"}
+	var schema: Dictionary = load(get_script().resource_path.get_base_dir()+"/shared_settings.gd").SCHEMA
+	for key in schema: _setting_row(key,labels[key],schema[key])
 	_actions = VBoxContainer.new()
 	box.add_child(_actions)
 	_error = _label(box,"")
@@ -293,9 +309,53 @@ func set_shared_summary(summary: Dictionary) -> void:
 func action_container() -> VBoxContainer:
 	return _actions
 
+func _setting_row(key: String, title: String, rule: Array) -> void:
+	var row := HBoxContainer.new()
+	_settings_box.add_child(row)
+	var label := _label(row,title)
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if rule[0]==TYPE_BOOL:
+		var control := CheckBox.new()
+		control.toggled.connect(func(value: bool): shared_setting_requested.emit(key,value))
+		row.add_child(control)
+		_settings_controls[key] = control
+	else:
+		var control := SpinBox.new()
+		control.min_value = rule[1]
+		control.max_value = rule[2]
+		control.step = 1
+		control.custom_minimum_size.x = 108
+		control.value_changed.connect(func(value: float):
+			shared_setting_requested.emit(key,int(value) if rule[0]==TYPE_INT else value)
+		)
+		row.add_child(control)
+		_settings_controls[key] = control
+
+func set_shared_settings(values: Dictionary) -> void:
+	_session_settings = values.duplicate(true)
+	_refresh_settings()
+
+func _refresh_settings() -> void:
+	if _settings_toggle==null: return
+	var active: bool = _session!=null and _session.state!=_session.State.OFFLINE and not _session_settings.is_empty()
+	_settings_toggle.visible = active
+	_settings_box.visible = active and _settings_toggle.button_pressed
+	var editable: bool = active and _session.is_host and _session.state==_session.State.PLAYING and not _closing
+	_settings_hint.text = tr_text("Änderungen gelten für die gesamte Sitzung." if editable else "Vom Host vorgegeben. Deine eigenen Werte werden beim Verlassen wiederhergestellt.")
+	for key in _settings_controls:
+		var control: Control = _settings_controls[key]
+		if control is CheckBox:
+			control.disabled = not editable
+			control.set_pressed_no_signal(_session_settings.get(key,false)==true)
+		else:
+			control.editable = editable
+			if _session_settings.has(key): control.set_value_no_signal(_session_settings[key])
+		control.tooltip_text = "" if editable else tr_text("Vom Host vorgegeben")
+
 func _refresh() -> void:
 	if _status==null: return
 	_version_label.text = tr_text("Installierte Mod-Version: %s") % tr_text(_report_version)
+	_refresh_settings()
 	_refresh_progress()
 	var offline: bool = _session==null or _session.state==_session.State.OFFLINE
 	var hosting: bool = not offline and _session.is_host

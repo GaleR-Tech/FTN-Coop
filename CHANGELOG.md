@@ -1,5 +1,29 @@
 # Changelog / Änderungen
 
+## 0.2.0 · 2026-10-20
+
+### English
+
+- Added a Buy me a Coffee link to the Windows installer.
+- Added shared gameplay settings in F2. The host controls nine values: loose/conveyor object limits and removal, cleanup and its interval, building-grid snapping, and host autosaving and its interval.
+- Joining guests receive the host values before native world construction. Later changes use the existing authenticated world synchronization.
+- Guests see read-only controls and a host-ownership notice. Local gameplay changes are reset to the shared values; personal graphics, audio, language and controls stay individual.
+- Original guest gameplay values are restored after leave, cancellation, host loss or normal shutdown. Native settings writes are deferred during the session, then personal changes are saved after restoration. Forced termination can lose those latest personal changes.
+- Added strict value validation, atomic patch rejection and automated settings, persistence, UI and network coverage. German and English remain selectable. Everyone must update to 0.2.0 and restart the demo.
+
+Only Find The Needle Demo V66 / build 25963876 on Windows is supported. Internet play between different Steam accounts remains unverified.
+
+### Deutsch
+
+- Buy-me-a-Coffee-Link im Windows-Installer ergänzt.
+- Gemeinsame Spieleinstellungen in F2 ergänzt. Der Host steuert neun Werte: Objektgrenzen und Entfernen für lose Objekte/Förderband-Inhalte, Aufräumen samt Intervall, Bauraster sowie Host-Autospeichern samt Intervall.
+- Beitretende Gäste übernehmen die Host-Werte vor dem nativen Weltaufbau. Spätere Änderungen nutzen den vorhandenen authentifizierten Weltabgleich.
+- Gäste sehen gesperrte Bedienelemente und den Hinweis auf die Host-Vorgabe. Lokale Änderungen an Spielwerten werden zurückgesetzt; Grafik, Ton, Sprache und Steuerung bleiben persönlich.
+- Eigene Spielwerte des Gastes werden nach Verlassen, Abbrechen, Host-Verlust und normalem Beenden wiederhergestellt. Einstellungen werden während der Sitzung erst später gespeichert; nach der Wiederherstellung bleiben persönliche Änderungen erhalten. Erzwungenes Beenden kann diese letzten persönlichen Änderungen verlieren.
+- Strenge Werteprüfung, vollständiges Abweisen fehlerhafter Aktualisierungen und automatische Einstellungen-, Speicher-, Oberflächen- und Netzwerkprüfungen ergänzt. Deutsch und Englisch bleiben auswählbar. Alle müssen auf 0.2.0 aktualisieren und die Demo neu starten.
+
+Unterstützt wird ausschließlich Find The Needle Demo V66 / Build 25963876 unter Windows. Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
+
 ## 0.1.4 · 2026-10-19
 
 ### English

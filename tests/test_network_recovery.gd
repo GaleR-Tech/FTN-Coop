@@ -103,12 +103,12 @@ func _guest(tree: SceneTree) -> Dictionary:
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	tree.root.add_child(wire)
 	tree.root.add_child(controller)
-	controller.configure(wire,game,"25963876","0.1.4")
+	controller.configure(wire,game,"25963876","0.2.0")
 	controller.set_process(false)
 	return {"controller":controller,"wire":wire,"game":game}
 
 func _welcome() -> Dictionary:
-	return {"session_id":"0123456789abcdef0123456789abcdef","player_id":2,"mod_version":"0.1.4","roster":[
+	return {"session_id":"0123456789abcdef0123456789abcdef","player_id":2,"mod_version":"0.2.0","roster":[
 		{"id":1,"name":"Host","state":"playing","accepted":true},
 		{"id":2,"name":"Guest","state":"syncing","accepted":true},
 	]}

@@ -141,6 +141,11 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 
 func _process(delta: float) -> void:
 	if session==null or _leaving: return
+	if _adapter.has_method("maintain_shared_settings"):
+		var maintained: Dictionary = _adapter.maintain_shared_settings()
+		if not maintained.ok:
+			_fail(maintained.code)
+			return
 	if not session.is_host and session.state==session.State.SYNCING and not _loading:
 		_sync_wait += delta
 		if _sync_wait >= (15.0 if connection_id.is_empty() else 120.0):
@@ -313,6 +318,11 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 		world_sync.accept_event(1,state.event)
 		return
 	if _loading or state.get("mode")!="world" or not state.get("native") is Dictionary or not state.get("frame") is Dictionary: return
+	if _adapter.has_method("apply_shared_settings"):
+		var settings: Dictionary = _adapter.apply_shared_settings(state.frame.get("settings"))
+		if not settings.ok:
+			_fail(settings.code)
+			return
 	_baseline_received = true
 	_loading = true
 	load_progress.emit("loading",0,0)
@@ -423,6 +433,10 @@ func _on_transport_failed(code: String) -> void:
 		var details: Dictionary = _transport.version_mismatch_details()
 		_set_version_mismatch(details.get("required"))
 	_fail(code)
+
+func _exit_tree() -> void:
+	if _adapter!=null and _adapter.has_method("restore_shared_settings"):
+		_adapter.restore_shared_settings()
 
 func _ok() -> Dictionary: return {"ok":true,"code":"OK","value":null}
 func _error(code: String) -> Dictionary: return {"ok":false,"code":code,"value":null}

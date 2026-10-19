@@ -3,6 +3,7 @@ extends RefCounted
 const MODULE_DIR := "res://mods/ftn_coop"
 
 const SCRIPT_PATHS := {
+	"cfg": "res://autoload/cfg.gd",
 	"saves": "res://autoload/save_manager.gd",
 	"state": "res://autoload/game_state.gd",
 	"tech": "res://autoload/tech.gd",
@@ -28,6 +29,7 @@ var _restore_epoch := 0
 var _closing_guest := false
 var _guest_save_block := false
 var _guest_world_block := false
+var _settings_scope: RefCounted
 
 func probe(root: Node) -> Dictionary:
 	if root == null or not is_instance_valid(root):
@@ -153,6 +155,27 @@ func pump_local_preview(delta: float) -> void:
 func shared_summary() -> Dictionary:
 	if not nodes.has("state") or not is_instance_valid(nodes.state): return {}
 	return {"money":nodes.state.get("money"),"needles":nodes.state.get("needles_found")}
+
+func _settings() -> RefCounted:
+	if _settings_scope==null: _settings_scope = load(MODULE_DIR+"/shared_settings.gd").new()
+	if nodes.has("cfg") and is_instance_valid(nodes.cfg): _settings_scope.configure(nodes.cfg)
+	return _settings_scope
+
+func read_shared_settings() -> Dictionary:
+	return _settings().capture()
+
+func apply_shared_settings(values: Variant) -> Dictionary:
+	return _settings().accept(values)
+
+func maintain_shared_settings() -> Dictionary:
+	return _settings().enforce()
+
+func restore_shared_settings() -> void:
+	if _settings_scope!=null: _settings_scope.release()
+
+func update_shared_setting(key: String, value: Variant) -> Dictionary:
+	if guest_mode: return _error("HOST_ONLY")
+	return _settings().update_host(key,value)
 
 func guest_options() -> Dictionary:
 	var result := {"tools":[],"shop":[],"buildings":[],"upgrades":[]}
@@ -397,6 +420,11 @@ func _live_frame() -> Dictionary:
 			return {}
 	last_sync_error = ""
 	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":nodes.builds.call("to_array").duplicate(true),"props":nodes.props.call("to_array").duplicate(true),"belts":nodes.world.call("_belts_to_dict").duplicate(true)}
+	var settings := read_shared_settings()
+	if not settings.ok:
+		last_sync_error = settings.code
+		return {}
+	frame.settings = settings.value
 	if nodes.has("live"):
 		if guest_mode:
 			frame.loose = _loose_module().current.duplicate(true)
@@ -463,6 +491,7 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 		return _ok()
 	# Restoring persistence requires the lifecycle's explicit origin restoration.
 	if not _save_origin.is_empty(): return _error("GUEST_SESSION_ACTIVE")
+	restore_shared_settings()
 	_restore_guest_collisions()
 	if has_world:
 		nodes.world.process_mode = _world_mode
@@ -548,6 +577,7 @@ func close_guest_world() -> Dictionary:
 	cancel_guest_restore()
 	if _closing_guest: return _error("GUEST_SESSION_BUSY")
 	if _save_origin.is_empty():
+		restore_shared_settings()
 		if guest_mode: set_guest_mode(false)
 		return _clear_guest_directory()
 	_closing_guest = true
@@ -644,6 +674,9 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 	if not event.get("patch") is Dictionary or not _patch_valid(event.patch): return _error("SNAPSHOT_INVALID")
 	var patch: Dictionary = event.patch
 	# Validate the whole update first; the guest world cannot simulate meanwhile.
+	if patch.has("settings"):
+		var settings := apply_shared_settings(patch.settings)
+		if not settings.ok: return settings
 	if patch.has("state"):
 		nodes.state.call("from_dict",patch.state)
 		# The native save loader clamps these values for an offline load. A live
@@ -699,9 +732,10 @@ func pump_guest_visuals() -> void:
 func _patch_valid(patch: Dictionary) -> bool:
 	if not _safe_native_data(patch,0): return false
 	for key in patch:
-		if key not in ["state","tech","heights","field","buildings","props","belts","loose"]: return false
-		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","belts":"world","loose":"world"}[key]
+		if key not in ["state","tech","heights","field","buildings","props","belts","loose","settings"]: return false
+		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","belts":"world","loose":"world","settings":"cfg"}[key]
 		if not nodes.has(role): return false
+		if key=="settings" and not _settings().validate(patch[key]).ok: return false
 		if key in ["state","tech"]:
 			if not patch[key] is Dictionary: return false
 			var template: Dictionary = nodes[role].call("to_dict")

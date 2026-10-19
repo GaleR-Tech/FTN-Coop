@@ -35,6 +35,8 @@ var _save_check := false
 var _offline_path := ""
 var _offline_hash := ""
 var _offline_directory := ""
+var _settings_original: Dictionary = {}
+const TEST_SETTINGS := {"prop_cap":300,"prop_decay":true,"belt_cap":600,"belt_decay":true,"auto_clean":false,"auto_clean_seconds":90.0,"grid_lock":false,"autosave":false,"autosave_seconds":180.0}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -57,6 +59,14 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	_adapter.bind(get_tree().root)
 	if not _adapter.nodes.has("world") or not _adapter.nodes.has("saves"): return _finish("WORLD_NOT_READY")
 	var saves: Node = _adapter.nodes.saves
+	if _role=="host":
+		for key in TEST_SETTINGS:
+			var setting: Dictionary = _adapter.update_shared_setting(key,TEST_SETTINGS[key])
+			if not setting.ok: return _finish(setting.code)
+	else:
+		_adapter.nodes.cfg.call("set_prop_cap",70+_index)
+		_adapter.nodes.cfg.call("set_grid_lock",true)
+		_settings_original = _adapter.read_shared_settings().value
 	saves.call("use_scratch_dir","user://ftn_coop/tests/"+run_id+"/world-"+str(_index))
 	saves.set("current_slot",1)
 	if _save_check and _role=="guest":
@@ -92,12 +102,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.1.4")
+		_runtime.configure(_adapter,transport,"25963876","0.2.0")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.1.4")
+		_network.configure(transport,_adapter,"25963876","0.2.0")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
@@ -125,6 +135,11 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	set_process(false)
 	_network.leave()
 	if _network.save_session.closing: await _network.save_session.closed
+	if _role=="guest" and _fatal.is_empty():
+		_checks.settings_restored = _adapter.read_shared_settings().value==_settings_original and not _adapter.nodes.cfg.get("settings_readonly")
+		_adapter.nodes.cfg.call("load_settings")
+		_checks.settings_disk_restored = _adapter.read_shared_settings().value==_settings_original and is_equal_approx(float(_adapter.nodes.cfg.get("mouse_sensitivity")),0.42)
+		if not _checks.settings_restored or not _checks.settings_disk_restored or not _checks.get("settings_live",false): _fatal = "SETTINGS_RESTORE_FAILED"
 	if _save_check and _fatal.is_empty():
 		if _role=="guest":
 			_checks.offline_unchanged = not _offline_hash.is_empty() and FileAccess.get_sha256(_offline_path)==_offline_hash
@@ -146,7 +161,7 @@ func _guest_actions() -> void:
 			if not _fatal.is_empty(): return
 		_network.leave()
 		if _network.save_session.closing: await _network.save_session.closed
-		_checks.cancel_clean = not _adapter.guest_mode and _adapter._save_origin.is_empty() and FileAccess.get_sha256(_offline_path)==_offline_hash
+		_checks.cancel_clean = not _adapter.guest_mode and _adapter._save_origin.is_empty() and FileAccess.get_sha256(_offline_path)==_offline_hash and _adapter.read_shared_settings().value==_settings_original
 		if not _checks.cancel_clean:
 			_fatal = "CANCEL_PERSISTENCE_FAILED"
 			return
@@ -158,6 +173,16 @@ func _guest_actions() -> void:
 		await get_tree().process_frame
 		if not _fatal.is_empty(): return
 	if _save_check: _checks.rejoined = true
+	_checks.settings_join = _adapter.read_shared_settings().value==TEST_SETTINGS
+	var settings_hash := FileAccess.get_sha256("user://settings.cfg")
+	_adapter.nodes.cfg.call("set_prop_cap",42)
+	_adapter.nodes.cfg.call("set_mouse_sensitivity",0.42)
+	for frame in range(3): await get_tree().process_frame
+	_checks.settings_enforced = _adapter.read_shared_settings().value==TEST_SETTINGS
+	_checks.settings_file_untouched = FileAccess.get_sha256("user://settings.cfg")==settings_hash
+	if not _checks.settings_join or not _checks.settings_enforced or not _checks.settings_file_untouched:
+		_fatal = "SETTINGS_JOIN_FAILED"
+		return
 	var player: Node3D = _adapter.nodes.player
 	if _presence_check:
 		var bound: Dictionary = _runtime.movement.configure(_adapter)
@@ -222,6 +247,8 @@ func _action(kind: String, payload: Dictionary) -> Dictionary:
 
 func _process(delta: float) -> void:
 	if _finished or _network==null or _adapter==null or _directory.is_empty(): return
+	if _role=="guest" and _network.session.state==_network.session.State.PLAYING and _adapter.nodes.cfg.get("prop_cap")==330:
+		_checks.settings_live = true
 	if _network.session.state==_network.session.State.PLAYING:
 		var revision: int = _network.world_sync.revision
 		if revision!=_last_revision:
@@ -354,6 +381,11 @@ func _extra_actions() -> void:
 			await _check_power_tool(actor,peer)
 			await _check_build_steps(actor)
 			await _check_loaded_departure(actor,peer)
+	if _presence_check:
+		_runtime.ui.set_shared_settings(_adapter.read_shared_settings().value)
+		_runtime.ui._settings_controls.prop_cap.value = 330
+	else: _adapter.update_shared_setting("prop_cap",330)
+	_checks.settings_host_edit = _adapter.nodes.cfg.get("prop_cap")==330
 	_network.world_sync.poll()
 	_scenario_revision = _network.world_sync.revision
 	_checks.purchase_once = _purchase_successes==1
@@ -362,7 +394,7 @@ func _extra_actions() -> void:
 	if _presence_check: await get_tree().create_timer(8.0).timeout
 	await get_tree().create_timer(1.0).timeout
 	_done = true
-	for key in ["build","machine_feed","needle_deposit","needle_once","purchase_once","dig"]:
+	for key in ["build","machine_feed","needle_deposit","needle_once","purchase_once","dig","settings_host_edit"]:
 		if _checks.get(key)!=true:
 			_fatal = "CHECK_"+String(key).to_upper()
 			_done = false

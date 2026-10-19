@@ -2,6 +2,21 @@ extends RefCounted
 
 const SETTINGS := "user://ftn_coop/settings.cfg"
 const EN := {
+	"Gemeinsame Spieleinstellungen":"Shared gameplay settings",
+	"Änderungen gelten für die gesamte Sitzung.":"Changes apply to the entire session.",
+	"Vom Host vorgegeben. Deine eigenen Werte werden beim Verlassen wiederhergestellt.":"Set by the host. Your own values are restored when you leave.",
+	"Vom Host vorgegeben":"Set by the host",
+	"Lose Objekte: Maximum":"Loose object limit",
+	"Lose Objekte automatisch entfernen":"Automatically remove loose objects",
+	"Förderband-Objekte: Maximum":"Conveyor object limit",
+	"Förderband-Objekte automatisch entfernen":"Automatically remove conveyor objects",
+	"Automatisch aufräumen":"Automatic cleanup",
+	"Aufräumintervall (Sekunden)":"Cleanup interval (seconds)",
+	"Am Bauraster ausrichten":"Snap to the building grid",
+	"Automatisch speichern (Host)":"Automatic saving (host)",
+	"Speicherintervall (Sekunden)":"Save interval (seconds)",
+	"Die gemeinsamen Spieleinstellungen sind ungültig. Tritt der Sitzung erneut bei.":"The shared gameplay settings are invalid. Join the session again.",
+	"Nur der Host kann die gemeinsamen Spieleinstellungen ändern.":"Only the host can change shared gameplay settings.",
 	"Installierte Mod-Version: %s":"Installed mod version: %s",
 	"Installiert: %s · Lobby benötigt: %s":"Installed: %s · Lobby requires: %s",
 	"Alle müssen dieselbe Mod-Version installieren und die Demo neu starten.":"Everyone must install the same mod version and restart the demo.",

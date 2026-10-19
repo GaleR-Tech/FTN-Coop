@@ -17,15 +17,16 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("FTN-Coop Setup")]
 [assembly: AssemblyProduct("FTN-Coop")]
-[assembly: AssemblyVersion("0.1.4.0")]
-[assembly: AssemblyFileVersion("0.1.4.0")]
+[assembly: AssemblyVersion("0.2.0.0")]
+[assembly: AssemblyFileVersion("0.2.0.0")]
 
 internal enum SetupLanguage { German, English }
 
 internal static class Program
 {
-    internal const string CurrentVersion = "0.1.4";
+    internal const string CurrentVersion = "0.2.0";
     internal const string ProjectUrl = "https://github.com/GaleR-Tech/FTN-Coop";
+    internal const string SupportUrl = "https://buymeacoffee.com/galertech";
 
     internal sealed class InstallationInfo
     {
@@ -388,6 +389,7 @@ internal sealed class SetupForm : Form
     private readonly Label stageHeading = new Label();
     private readonly Label footer = new Label();
     private readonly LinkLabel projectLink = new LinkLabel();
+    private readonly LinkLabel supportLink = new LinkLabel();
     private readonly ComboBox languageSelector = new ComboBox();
     private readonly StageProgressBar progress = new StageProgressBar();
     private readonly Font versionFont = new Font("Segoe UI", 19, FontStyle.Bold);
@@ -511,7 +513,25 @@ internal sealed class SetupForm : Form
         progress.TabStop = false;
         footer.Font = new Font("Segoe UI", 8);
         footer.ForeColor = Muted;
-        footer.Bounds = new Rectangle(24, 625, 480, 20);
+        footer.Bounds = new Rectangle(24, 625, 305, 20);
+        supportLink.Name = "SupportLink";
+        supportLink.Font = new Font("Segoe UI", 9);
+        supportLink.LinkColor = supportLink.VisitedLinkColor = Gold;
+        supportLink.ActiveLinkColor = Ink;
+        supportLink.DisabledLinkColor = Muted;
+        supportLink.LinkBehavior = LinkBehavior.HoverUnderline;
+        supportLink.TextAlign = ContentAlignment.MiddleRight;
+        supportLink.SetBounds(344, 621, 174, 25);
+        supportLink.TabIndex = 5;
+        supportLink.LinkClicked += delegate {
+            try { Process.Start(new ProcessStartInfo(Program.SupportUrl) { UseShellExecute = true }); }
+            catch (Exception) {
+                MessageBox.Show(this, Program.Text(language,
+                    "Buy me a Coffee konnte nicht geöffnet werden. Öffne diese Adresse im Browser:\r\n" + Program.SupportUrl,
+                    "Buy me a Coffee could not be opened. Open this address in your browser:\r\n" + Program.SupportUrl),
+                    Program.ProductName(language), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        };
         projectLink.Name = "ProjectLink";
         projectLink.Font = new Font("Segoe UI", 9);
         projectLink.LinkColor = projectLink.VisitedLinkColor = Gold;
@@ -520,7 +540,7 @@ internal sealed class SetupForm : Form
         projectLink.LinkBehavior = LinkBehavior.HoverUnderline;
         projectLink.TextAlign = ContentAlignment.MiddleRight;
         projectLink.SetBounds(528, 621, 168, 25);
-        projectLink.TabIndex = 5;
+        projectLink.TabIndex = 6;
         projectLink.LinkClicked += delegate {
             try { Process.Start(new ProcessStartInfo(Program.ProjectUrl) { UseShellExecute = true }); }
             catch (Exception) {
@@ -532,7 +552,7 @@ internal sealed class SetupForm : Form
         };
         Controls.AddRange(new Control[] { brand, heading, description, languageLabel, languageSelector, directoryLabel,
             directory, browse, installedHeading, installedVersion, targetHeading, targetVersion, versionArrow,
-            install, remove, removeHint, stageHeading, status, progress, footer, projectLink });
+            install, remove, removeHint, stageHeading, status, progress, footer, supportLink, projectLink });
         AcceptButton = install;
         directory.Text = Program.FindDemo();
         ApplyLanguage();
@@ -632,6 +652,11 @@ internal sealed class SetupForm : Form
         removeHint.Text = installation.Managed && !installation.Active ? Program.Text(language, "Lokale Dateien vor Neuinstallation sichern.", "Back up local files before reinstalling.") :
             Program.Text(language, "Deine Spielstände bleiben erhalten.", "Your save files are kept.");
         footer.Text = "GaleR-Tech · FTN-Coop · " + Program.CurrentVersion;
+        supportLink.Text = "Buy me a Coffee";
+        supportLink.Links.Clear();
+        supportLink.Links.Add(0, supportLink.Text.Length, Program.SupportUrl);
+        supportLink.AccessibleName = supportLink.Text;
+        supportLink.AccessibleDescription = Program.Text(language, "Öffnet die Buy-me-a-Coffee-Seite von GaleR-Tech im Standardbrowser.", "Opens GaleR-Tech's Buy me a Coffee page in your default browser.");
         projectLink.Text = Program.Text(language, "GitHub-Projekt", "GitHub project");
         projectLink.Links.Clear();
         projectLink.Links.Add(0, projectLink.Text.Length, Program.ProjectUrl);

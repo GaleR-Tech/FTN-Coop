@@ -47,6 +47,7 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	ui.leave_requested.connect(_leave)
 	ui.save_requested.connect(_save)
 	ui.copy_report_requested.connect(_copy_report)
+	ui.shared_setting_requested.connect(_change_shared_setting)
 	ui.language_changed.connect(func():
 		if _is_guest(): _populate_actions()
 	)
@@ -121,6 +122,17 @@ func _copy_report() -> void:
 	DisplayServer.clipboard_set(ui.diagnostic_report())
 	ui.show_report_copied()
 
+func _change_shared_setting(key: String, value: Variant) -> void:
+	if not network.session.is_host or network.session.state!=network.session.State.PLAYING:
+		ui.show_error("SETTINGS_HOST_ONLY")
+		return
+	if not _adapter.has_method("update_shared_setting"): return
+	var changed: Dictionary = _adapter.update_shared_setting(key,value)
+	if not changed.ok: ui.show_error(changed.code)
+	else:
+		ui.set_shared_settings(changed.value)
+		network.world_sync.poll()
+
 func _leave() -> void:
 	_pending_invitation = 0
 	network.leave()
@@ -193,6 +205,9 @@ func _process(delta: float) -> void:
 		_hud_due = 0.0
 		_prepare_transport()
 		if _adapter.has_method("shared_summary"): ui.set_shared_summary(_adapter.shared_summary())
+		if _adapter.has_method("read_shared_settings"):
+			var settings: Dictionary = _adapter.read_shared_settings()
+			ui.set_shared_settings(settings.value if settings.ok else {})
 
 func _on_primary(kind: String, payload: Dictionary) -> void:
 	if not _is_guest(): return

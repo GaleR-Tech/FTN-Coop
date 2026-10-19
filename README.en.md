@@ -1,4 +1,4 @@
-# FTN-Coop · 0.1.4
+# FTN-Coop · 0.2.0
 
 English · [Deutsch](README.de.md)
 
@@ -47,7 +47,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.1.4-Setup.exe**:
+The easiest option is **FTN-Coop-0.2.0-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -111,6 +111,23 @@ within reach.
 
 All participants must use exactly the same mod version and demo build. An incompatible mod version is rejected before world loading. The F2 menu shows your installed version, the version required by the lobby and an **Open mod downloads** button. Everyone should install the same package, then restart the demo; this also applies if the host has an older version. Connections
 are designed to use Steam relays; router port forwarding is not part of setup.
+
+## Shared gameplay settings
+
+New in **0.2.0**: F2 → **Shared gameplay settings** lets the host change the rules
+for everyone in the session. Guests see the current values with **Set by the host**;
+their controls are locked. Host changes are synchronized during play, and joining
+guests receive the values before their world is constructed.
+
+The shared values are loose/conveyor object limits and automatic removal,
+automatic cleanup and its interval, building-grid snapping, and the host's
+automatic-saving switch and interval. Only the host saves the shared world.
+
+Guests' original gameplay values are restored on leave, cancellation or host loss.
+Graphics, audio, language and controls remain personal. Changes to personal options
+made as a guest are saved when leaving or closing the demo normally; forced
+termination may lose those latest personal changes. Temporary host values are not
+written into the guest's personal settings file.
 
 ## Save and leave
 
