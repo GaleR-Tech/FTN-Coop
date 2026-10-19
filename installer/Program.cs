@@ -13,8 +13,8 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("FTN-Koop Setup")]
 [assembly: AssemblyProduct("FTN-Koop")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("0.1.1.0")]
+[assembly: AssemblyFileVersion("0.1.1.0")]
 
 internal static class Program
 {
@@ -218,7 +218,7 @@ internal sealed class SetupForm : Form
         status.SetBounds(24, 241, 520, 49);
         status.Text = "Demo schließen, dann auf Installieren klicken.";
         Controls.AddRange(new Control[] { directory, browse, install, remove, status,
-            new Label { Text = "0.1.0-dev · Internettest mit getrennten Steam-Konten noch offen.", Font = new Font("Segoe UI", 8), ForeColor = Color.DimGray, Bounds = new Rectangle(24, 307, 530, 20) } });
+            new Label { Text = "0.1.1 · Internettest mit getrennten Steam-Konten noch offen.", Font = new Font("Segoe UI", 8), ForeColor = Color.DimGray, Bounds = new Rectangle(24, 307, 530, 20) } });
         FormClosing += delegate(object sender, FormClosingEventArgs args) { if (busy) args.Cancel = true; };
     }
 

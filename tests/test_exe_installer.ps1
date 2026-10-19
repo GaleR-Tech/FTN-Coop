@@ -3,7 +3,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $builder = Join-Path $projectRoot 'tools\BuildInstaller.ps1'
 if (-not (Test-Path -LiteralPath $builder)) { throw 'EXE installer builder is missing.' }
 & $builder
-$setup = Join-Path $projectRoot 'dist\FTN-Coop-0.1.0-dev-Setup.exe'
+$setup = Join-Path $projectRoot 'dist\FTN-Coop-0.1.1-Setup.exe'
 if (-not (Test-Path -LiteralPath $setup)) { throw 'Single-file EXE installer was not built.' }
 function Require([bool]$condition,[string]$message) { if (-not $condition) { throw $message } }
 function Run-Setup([string]$action,[string]$game) {

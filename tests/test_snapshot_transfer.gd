@@ -29,16 +29,24 @@ func run(_tree: SceneTree) -> Array[String]:
 		if not packet.ok or not protocol.decode(packet.value).ok:
 			errors.append("Every 32 KiB world chunk must fit into a validated transport packet.")
 	var completed: Array = []
+	var progress: Array = []
+	if receiver.has_signal("progress_changed"):
+		receiver.progress_changed.connect(func(received: int, total: int): progress.append([received,total]))
+	else: errors.append("Validated world chunks must expose byte progress.")
 	receiver.completed.connect(func(world: Dictionary, revision: int): completed.append({"world": world, "revision": revision}))
 	receiver.receive(1, frames[0])
+	if not progress.is_empty() and progress[-1]!=[0,frames[0].total_bytes]: errors.append("A fresh transfer must begin at zero received bytes.")
 	receiver.receive(1, frames[1])
+	var progress_count := progress.size()
 	receiver.receive(1, frames[1])
+	if progress.size()!=progress_count: errors.append("Duplicate chunks must not advance progress.")
 	if not completed.is_empty():
 		errors.append("Missing or repeated chunks must not load a partial world.")
 	for index in range(frames.size() - 1, 1, -1):
 		receiver.receive(1, frames[index])
 	if completed.size() != 1 or completed[0].world != state or completed[0].revision != 10:
 		errors.append("Shuffled chunks must reconstruct the exact world once.")
+	if not progress.is_empty() and progress[-1]!=[frames[0].total_bytes,frames[0].total_bytes]: errors.append("Completed data reception must report its exact byte count.")
 	if receiver.receive(1, frames[0]).code != "STALE_REVISION":
 		errors.append("An old world must not overwrite the current world.")
 	receiver.configure("fedcba9876543210fedcba9876543210")

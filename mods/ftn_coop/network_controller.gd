@@ -4,6 +4,7 @@ signal problem(code: String)
 signal pose_received(peer_id: int, pose: Dictionary)
 signal stopped
 signal action_result(sequence: int, ok: bool, code: String)
+signal load_progress(stage: String, received_bytes: int, total_bytes: int)
 
 var session: Node
 var world_sync: Node
@@ -24,6 +25,7 @@ var _sequence := 0
 var _poll_due := 0.0
 var _pose_due := 0.0
 var _loading := false
+var _baseline_received := false
 var _leaving := false
 var _resync_pending := false
 var _resync_attempts := 0
@@ -52,6 +54,7 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 	world_sync.resync_required.connect(_request_resync)
 	_receiver.completed.connect(_on_snapshot_completed)
 	_receiver.failed.connect(func(_code: String): _request_resync())
+	_receiver.progress_changed.connect(_on_transfer_progress)
 	transport.message_received.connect(_on_message)
 	transport.disconnected.connect(_on_disconnected)
 	transport.failed.connect(func(code: String): _fail(code))
@@ -81,10 +84,12 @@ func leave() -> void:
 	_world_retries.clear()
 	connection_id = ""
 	_loading = false
+	_baseline_received = false
 	_resync_pending = false
 	_resync_attempts = 0
 	_sequence = 0
 	_receiver.cancel()
+	load_progress.emit("idle",0,0)
 	session.leave()
 	world_sync.configure(_adapter,false)
 	_leaving = false
@@ -103,6 +108,9 @@ func request_action(kind: String, payload: Dictionary) -> Dictionary:
 
 func _on_state_changed() -> void:
 	if _leaving: return
+	if not session.is_host:
+		if session.state==session.State.SYNCING: load_progress.emit("waiting",0,0)
+		elif session.state==session.State.PLAYING: load_progress.emit("ready",0,0)
 	if session.is_host and session.state==session.State.LOBBY:
 		world_sync.configure(_adapter,true)
 		world_sync.set_ready(1,true)
@@ -271,13 +279,19 @@ func _start_world(peer: int) -> void:
 			_fail(queued.code,peer)
 			break
 
+func _on_transfer_progress(received: int, total: int) -> void:
+	if not session.is_host and session.state==session.State.SYNCING and not _baseline_received:
+		load_progress.emit("receiving",received,total)
+
 func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	if session.is_host: return
 	if state.get("mode")=="event" and state.get("event") is Dictionary:
 		world_sync.accept_event(1,state.event)
 		return
 	if _loading or state.get("mode")!="world" or not state.get("native") is Dictionary or not state.get("frame") is Dictionary: return
+	_baseline_received = true
 	_loading = true
+	load_progress.emit("loading",0,0)
 	var epoch := _epoch
 	var restored: Dictionary = await save_session.open_guest(state.native,session.session_id)
 	if epoch!=_epoch: return
@@ -291,6 +305,7 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 		return
 	if state.get("spawn") is Transform3D and _adapter.has_method("set_local_spawn"): _adapter.set_local_spawn(state.spawn)
 	world_sync.accept_baseline(revision)
+	load_progress.emit("catching_up",0,0)
 	_queue(1,"WORLD_READY",{"stage":"baseline","revision":revision})
 
 func _finish_world(peer: int, body: Dictionary) -> void:
@@ -337,7 +352,9 @@ func _request_resync() -> void:
 		_fail("RESYNC_FAILED")
 		return
 	_resync_pending = true
+	_baseline_received = false
 	_receiver.cancel()
+	load_progress.emit("waiting",0,0)
 	session._set_state(session.State.SYNCING)
 	_queue(1,"WORLD_REQUEST",{})
 

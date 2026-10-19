@@ -2,6 +2,7 @@ extends Node
 
 signal completed(state: Dictionary, revision: int)
 signal failed(code: String)
+signal progress_changed(received_bytes: int, total_bytes: int)
 
 const CHUNK_BYTES := 32768
 const MAX_PACKED := 64 * 1024 * 1024
@@ -16,6 +17,7 @@ var _elapsed := 0.0
 var _baseline := -1
 var _events: Array[Dictionary] = []
 var _events_bytes := 0
+var _received_bytes := 0
 
 func configure(id: String) -> void:
 	if id != session_id: last_revision = -1
@@ -65,6 +67,8 @@ func receive(peer_id: int, frame: Dictionary) -> Dictionary:
 	if _chunks.has(frame.index):
 		return _ok() if _chunks[frame.index] == frame.data else _fail("CHUNK_CONFLICT")
 	_chunks[frame.index] = frame.data.duplicate()
+	_received_bytes += frame.data.size()
+	progress_changed.emit(_received_bytes,int(_header.total_bytes))
 	if _chunks.size() != _header.chunks: return _ok()
 	var packed := PackedByteArray()
 	for index in range(_header.chunks): packed.append_array(_chunks[index])
@@ -92,11 +96,13 @@ func _start(frame: Dictionary) -> Dictionary:
 		if frame.revision <= _header.revision: return _error("STALE_REVISION")
 	cancel()
 	_header = frame.duplicate(true)
+	progress_changed.emit(0,int(_header.total_bytes))
 	return _ok()
 
 func cancel() -> void:
 	_header.clear()
 	_chunks.clear()
+	_received_bytes = 0
 	_elapsed = 0.0
 	_baseline = -1
 	_events.clear()

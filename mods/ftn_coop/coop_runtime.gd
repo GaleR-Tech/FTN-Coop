@@ -33,6 +33,8 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	ui = load(base+"/coop_ui.gd").new()
 	add_child(ui)
 	ui.bind_session(network.session)
+	ui.configure_diagnostics(build,version)
+	network.load_progress.connect(ui.set_load_progress)
 	presence = load(base+"/presence.gd").new()
 	add_child(presence)
 	movement = load(base+"/guest_movement.gd").new()
@@ -44,6 +46,7 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	ui.invite_requested.connect(_invite)
 	ui.leave_requested.connect(_leave)
 	ui.save_requested.connect(_save)
+	ui.copy_report_requested.connect(_copy_report)
 	ui.panel_toggled.connect(_on_panel_toggled)
 	ui.action_requested.connect(_request)
 	input_bridge.action_requested.connect(_on_primary)
@@ -104,8 +107,16 @@ func _invite() -> void:
 	if not result.ok: ui.show_error(result.code)
 
 func _save() -> void:
+	if not network.session.is_host or network.session.state!=network.session.State.PLAYING:
+		ui.show_error("HOST_ONLY")
+		return
 	var result: Dictionary = network.save_session.save_host()
 	if not result.ok: ui.show_error(result.code)
+	else: ui.show_saved()
+
+func _copy_report() -> void:
+	DisplayServer.clipboard_set(ui.diagnostic_report())
+	ui.show_report_copied()
 
 func _leave() -> void:
 	_pending_invitation = 0
@@ -147,6 +158,7 @@ func _stopped() -> void:
 		await get_tree().process_frame
 		var saved: Dictionary = network.save_session.save_host()
 		if not saved.ok: ui.show_error(saved.code)
+		else: ui.show_saved(false)
 
 func _on_panel_toggled(open: bool) -> void:
 	if open:

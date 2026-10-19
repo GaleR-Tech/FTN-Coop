@@ -4,6 +4,7 @@ signal restore_started
 
 var tree: SceneTree
 var restoring := false
+var save_failure := false
 var last_sync_error := ""
 var pose := {"position":Vector3.ZERO,"rotation":Vector3.ZERO}
 var actor_poses: Dictionary = {}
@@ -43,5 +44,5 @@ func cancel_guest_restore() -> void: pass
 func close_guest_world() -> Dictionary:
 	guest = false
 	return _ok()
-func save_host_world() -> Dictionary: return _ok()
+func save_host_world() -> Dictionary: return {"ok":false,"code":"SAVE_FAILED","value":null} if save_failure else _ok()
 func _ok(value: Variant=null) -> Dictionary: return {"ok":true,"code":"OK","value":value}

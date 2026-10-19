@@ -1,6 +1,6 @@
 extends Node
 
-const VERSION := "0.1.0-dev"
+const VERSION := "0.1.1"
 const REQUIRED_CAPABILITIES := [
 	"snapshot_capture", "snapshot_restore", "action_capture", "host_apply",
 	"guest_mutation_guard", "machine_host_only", "player_pose", "isolated_guest_session", "host_save",

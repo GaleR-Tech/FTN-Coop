@@ -26,6 +26,32 @@ func run(tree: SceneTree) -> Array[String]:
 	tree.root.add_child(session)
 	tree.root.add_child(ui)
 	ui.bind_session(session)
+	if not ui.has_method("diagnostic_report") or not ui.has_method("set_load_progress") or not ui.has_method("show_saved"):
+		errors.append("0.1.1 needs safe diagnostics, actual load progress and save confirmation.")
+	else:
+		ui.configure_diagnostics("25963876","0.1.1")
+		session.state = session.State.SYNCING
+		session.roster = {1:{"name":"PRIVATE_NAME C:/Users/SECRET"},2:{"name":"76561190000000000"}}
+		ui.set_load_progress("receiving",50,100)
+		if not ui.progress_text().contains("50 %"): errors.append("The UI must show actual data-transfer percentage.")
+		ui.set_load_progress("loading",0,0)
+		if not ui.progress_text().contains("aufgebaut") or ui.progress_text().contains("100 %"): errors.append("Received data must not pretend native world loading has finished.")
+		ui.show_error("TRANSFER_TIMEOUT")
+		session.state = session.State.OFFLINE
+		session.roster.clear()
+		var report: String = ui.diagnostic_report()
+		for required in ["0.1.1","25963876","TRANSFER_TIMEOUT","2 / 4"]:
+			if not report.contains(required): errors.append("Diagnostics lost useful failure context: "+required)
+		for forbidden in ["PRIVATE_NAME","C:/Users/SECRET","76561190000000000"]:
+			if report.contains(forbidden): errors.append("Diagnostics exposed personal/session data.")
+		ui.configure_diagnostics("PRIVATE_BUILD\nC:/secret","PRIVATE_VERSION")
+		ui.show_error("PRIVATE_ERROR_TOKEN")
+		report = ui.diagnostic_report()
+		if report.contains("PRIVATE_") or report.contains("C:/secret"): errors.append("Unknown diagnostic strings must not bypass the fixed-field report.")
+		ui.show_saved()
+		if not ui.notice_text().contains("gespeichert"): errors.append("A successful save must have visible confirmation.")
+		ui.show_error("SAVE_FAILED")
+		if not ui.notice_text().is_empty(): errors.append("A failed save must clear the success notice.")
 	ui.set_panel_open(false)
 	session.state = session.State.SYNCING
 	if ui.actions_allowed(): errors.append("No guest world actions are allowed while synchronizing.")
@@ -46,7 +72,7 @@ func run(tree: SceneTree) -> Array[String]:
 	var game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
 	game.tree = tree
 	tree.root.add_child(runtime)
-	runtime.configure(game,transport,"25963876","0.1.0-dev")
+	runtime.configure(game,transport,"25963876","0.1.1")
 	transport.simulate_invitation(42)
 	if transport.join_calls!=1 or runtime.network.session.state!=runtime.network.session.State.JOINING: errors.append("Steam invitations must be received before the player ever hosts or joins manually.")
 	runtime.ui.host_requested.emit()
@@ -55,8 +81,24 @@ func run(tree: SceneTree) -> Array[String]:
 	if runtime.network.session.state!=runtime.network.session.State.PLAYING: errors.append("The host button must create a playable host session.")
 	runtime.ui.invite_requested.emit()
 	if transport.invite_calls!=1: errors.append("The invite button must open exactly one Steam friend picker.")
+	if runtime.ui.has_method("notice_text"):
+		runtime.ui.save_requested.emit()
+		if not runtime.ui.notice_text().contains("gespeichert"): errors.append("The real save button must display success only after saving.")
+		game.save_failure = true
+		runtime.ui.save_requested.emit()
+		if not runtime.ui.notice_text().is_empty() or not runtime.ui.error_text().contains("nicht gespeichert"): errors.append("Native save failure must stay visible without a success notice.")
+		game.save_failure = false
+	runtime.network._fail("TRANSFER_TIMEOUT")
+	await tree.process_frame
+	await tree.process_frame
+	if not runtime.ui.error_text().contains("übertragen") or (runtime.ui.has_method("diagnostic_report") and not runtime.ui.diagnostic_report().contains("TRANSFER_TIMEOUT")):
+		errors.append("Successful teardown autosave must preserve the host session failure and its diagnostic context.")
+	runtime.ui.host_requested.emit()
+	await tree.process_frame
+	await tree.process_frame
 	runtime.ui.leave_requested.emit()
 	if runtime.network.session.state!=runtime.network.session.State.OFFLINE: errors.append("The leave button must close the session.")
+	await tree.process_frame
 	runtime.queue_free()
 	await tree.process_frame
 	return errors

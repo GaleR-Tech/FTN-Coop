@@ -7,6 +7,7 @@ signal save_requested
 signal panel_toggled(open: bool)
 signal action_requested(kind: String, payload: Dictionary)
 signal tool_selected(index: int)
+signal copy_report_requested
 
 const ERRORS := {
 	"SESSION_FULL":"Die Sitzung ist voll. Maximal vier Spieler können gemeinsam spielen.",
@@ -57,6 +58,14 @@ var _host_available := false
 var _capability_text := "Lade einen Spielstand, um eine Sitzung zu erstellen."
 var _shared: Label
 var _closing := false
+var _progress: Label
+var _notice: Label
+var _load_stage := "idle"
+var _load_received := 0
+var _load_total := 0
+var _report_build := "unbekannt"
+var _report_version := "unbekannt"
+var _last_problem: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -93,6 +102,7 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size",23)
 	box.add_child(title)
 	_status = _label(box,"Nicht verbunden · 0 / 4")
+	_progress = _label(box,"")
 	_hint = _label(box,_capability_text)
 	_roster = _label(box,"")
 	_shared = _label(box,"")
@@ -104,6 +114,9 @@ func _ready() -> void:
 	box.add_child(_actions)
 	_error = _label(box,"")
 	_error.add_theme_color_override("font_color",Color("ffcc99"))
+	_notice = _label(box,"")
+	_notice.add_theme_color_override("font_color",Color("a9e6b0"))
+	_button(box,"Fehlerbericht kopieren",func(): copy_report_requested.emit())
 	_label(box,"F2 öffnet und schließt dieses Menü.\nEntwicklungsstand · Internettest ausstehend.").add_theme_font_size_override("font_size",13)
 	set_panel_open(false)
 	_refresh()
@@ -138,6 +151,9 @@ func is_panel_open() -> bool:
 	return _panel!=null and _panel.visible
 
 func show_error(code: String) -> void:
+	_last_problem = _report_context()
+	_last_problem.error = code if ERRORS.has(code) else "UNBEKANNTER_FEHLER"
+	if _notice!=null: _notice.text = ""
 	if _error!=null: _error.text = ERRORS.get(code,"Die Aktion konnte nicht abgeschlossen werden. Versuche es erneut.")
 	set_panel_open(true)
 
@@ -146,6 +162,52 @@ func error_text() -> String:
 
 func clear_error() -> void:
 	if _error!=null: _error.text = ""
+	_last_problem.clear()
+
+func configure_diagnostics(build: String, version: String) -> void:
+	_report_build = _report_value(build,"[0-9]{1,12}")
+	_report_version = _report_value(version,"[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(-[a-z0-9.]{1,16})?")
+
+func _report_value(value: String, pattern: String) -> String:
+	if value.length()>40: return "unbekannt"
+	var found := RegEx.create_from_string("^"+pattern+"$").search(value)
+	return value if found!=null and found.get_string()==value else "unbekannt"
+
+func _report_context() -> Dictionary:
+	var states := ["offline","hosting","joining","lobby","syncing","playing"]
+	var state: int = clampi(int(_session.state),0,5) if _session!=null else 0
+	return {"state":states[state],"role":"keine" if state==0 else ("Host" if _session.is_host else "Gast"),"players":clampi(_session.roster.size(),0,4) if _session!=null else 0,"stage":_load_stage,"received":_load_received,"total":_load_total,"error":"KEIN_FEHLER"}
+
+func diagnostic_report() -> String:
+	# Only fixed fields and allowlisted values; never dump session/adapter data.
+	var context: Dictionary = _last_problem if not _last_problem.is_empty() else _report_context()
+	var engine: Dictionary = Engine.get_version_info()
+	return "FTN-Koop Fehlerbericht\nMod-Version: %s\nDemo-Build: %s\nGodot: %d.%d.%d\nSystem: %s\nSitzung: %s\nRolle: %s\nSpieler: %d / 4\nLadephase: %s\nEmpfangene Bytes: %d / %d\nFehler: %s\nInternettest: ausstehend\n" % [_report_version,_report_build,int(engine.major),int(engine.minor),int(engine.patch),"Windows" if OS.get_name()=="Windows" else "anderes",context.state,context.role,context.players,context.stage,context.received,context.total,context.error]
+
+func set_load_progress(stage: String, received: int, total: int) -> void:
+	if stage not in ["idle","waiting","receiving","loading","catching_up","ready"]: return
+	_load_stage = stage
+	_load_total = clampi(total,0,64*1024*1024)
+	_load_received = clampi(received,0,_load_total)
+	if _progress==null: return
+	var texts := {"idle":"","waiting":"Warte auf Weltdaten …","receiving":"Weltdaten werden empfangen …","loading":"Welt wird aufgebaut …","catching_up":"Gemeinsamer Fortschritt wird abgeglichen …","ready":""}
+	_progress.text = texts[stage]
+	if stage=="receiving" and _load_total>0:
+		_progress.text = "Weltdaten empfangen: %d %%" % int(100.0*_load_received/_load_total)
+	_refresh()
+
+func progress_text() -> String:
+	return _progress.text if _progress!=null else ""
+
+func show_saved(clear_problem: bool=true) -> void:
+	if clear_problem: clear_error()
+	if _notice!=null: _notice.text = "Gemeinsamer Fortschritt gespeichert um "+Time.get_time_string_from_system()+"."
+
+func show_report_copied() -> void:
+	if _notice!=null: _notice.text = "Fehlerbericht kopiert. Du kannst ihn vor dem Teilen prüfen."
+
+func notice_text() -> String:
+	return _notice.text if _notice!=null else ""
 
 func set_shared_summary(summary: Dictionary) -> void:
 	if _shared==null: return
@@ -165,6 +227,7 @@ func _refresh() -> void:
 	var offline: bool = _session==null or _session.state==_session.State.OFFLINE
 	var hosting: bool = not offline and _session.is_host
 	var playing: bool = not offline and _session.state==_session.State.PLAYING
+	_progress.visible = not offline and not hosting and not _closing and _load_stage not in ["idle","ready"]
 	var names := ["Nicht verbunden","Sitzung wird erstellt …","Verbindung wird hergestellt …","Welt wird vorbereitet …","Welt wird geladen …","Gemeinsam spielbereit"]
 	_status.text = names[_session.state if _session!=null else 0]+" · "+str(_session.roster.size() if _session!=null else 0)+" / 4"
 	_host.visible = offline

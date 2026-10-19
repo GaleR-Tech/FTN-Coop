@@ -1,6 +1,6 @@
 # FTN-Koop · Internettest noch offen
 
-Version 0.1.0-dev · Demo-Build 25963876 · Stand 16.10.2026.
+Version 0.1.1 · Demo-Build 25963876 · Stand 19.10.2026.
 Lokale echte Demo-Prozesse sind getrennt vom folgenden Internetnachweis zu bewerten.
 Niemand wurde automatisch angeschrieben oder eingeladen.
 

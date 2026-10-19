@@ -19,13 +19,26 @@ func run(tree: SceneTree) -> Array[String]:
 	var host: Node = module.new()
 	var guest: Node = module.new()
 	for node in [host_wire,guest_wire,host,guest]: tree.root.add_child(node)
-	host.configure(host_wire,host_game,"25963876","0.1.0-dev")
-	guest.configure(guest_wire,guest_game,"25963876","0.1.0-dev")
+	host.configure(host_wire,host_game,"25963876","0.1.1")
+	guest.configure(guest_wire,guest_game,"25963876","0.1.1")
+	var stages: Array[String] = []
+	if guest.has_signal("load_progress"):
+		guest.load_progress.connect(func(stage: String, _received: int, _total: int): stages.append(stage))
+	else: errors.append("The controller must expose transfer, native loading and ready stages.")
+	guest._receiver.failed.connect(func(_code: String):
+		if not stages.is_empty() and stages[-1]!="waiting": errors.append("A rejected baseline must immediately reset its completed receive indicator.")
+	)
 	host_wire.corrupt_baselines = 1
 	host.host()
 	await tree.process_frame
 	var buffered_production := [false]
 	guest_game.restore_started.connect(func():
+		var bulk := PackedByteArray()
+		bulk.resize(160000)
+		var random := RandomNumberGenerator.new()
+		random.seed = 112233
+		for index in range(bulk.size()): bulk[index] = random.randi() & 255
+		host_game.world.bulk = bulk
 		host_game.produce()
 		host.world_sync.poll()
 		buffered_production[0] = true
@@ -36,6 +49,12 @@ func run(tree: SceneTree) -> Array[String]:
 		await tree.process_frame
 		if guest.session.state == guest.session.State.PLAYING: break
 	if host_wire.corrupted_baselines!=1: errors.append("The recovery test must damage one actual transferred baseline.")
+	if not stages.is_empty():
+		for stage in ["receiving","loading","catching_up","ready"]:
+			if not stages.has(stage): errors.append("Missing real join progress stage: "+stage)
+		var catch_up := stages.find("catching_up")
+		if catch_up>=0 and stages.slice(catch_up+1).has("receiving"):
+			errors.append("Large catch-up events must not replace the world catch-up phase with baseline download progress.")
 	if guest.session.state != guest.session.State.PLAYING or not buffered_production[0] or guest_game.world != host_game.world:
 		errors.append("A corrupted initial baseline must be replaced and replay buffered production before playing. state="+str(guest.session.state)+" buffered="+str(buffered_production)+" revision="+str(guest.world_sync.revision))
 	else:
@@ -53,6 +72,7 @@ func run(tree: SceneTree) -> Array[String]:
 		for frame in range(10): await tree.process_frame
 		if host_game.world.money != 0 or guest_game.world != host_game.world: errors.append("Wire retries must not duplicate purchases.")
 	guest.leave()
+	if not stages.is_empty() and stages[-1]!="idle": errors.append("Leaving must reset displayed transfer progress.")
 	host.leave()
 	for node in [host,guest,host_wire,guest_wire]: node.queue_free()
 	await tree.process_frame
@@ -77,7 +97,7 @@ func _four_socket_peers(tree: SceneTree) -> Array[String]:
 		var controller: Node = module.new()
 		tree.root.add_child(wire)
 		tree.root.add_child(controller)
-		controller.configure(wire,game,"25963876","0.1.0-dev")
+		controller.configure(wire,game,"25963876","0.1.1")
 		wires.append(wire)
 		games.append(game)
 		controllers.append(controller)

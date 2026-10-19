@@ -1,4 +1,4 @@
-# FTN-Koop · 0.1.0-dev
+# FTN-Koop · 0.1.1
 
 Eigene, inoffizielle Koop-Mod für **Find The Needle Demo unter Windows**.
 Ein Host und bis zu drei Freunde arbeiten in derselben Welt. Geld, Forschung,
@@ -12,6 +12,10 @@ Spielupdates benötigen eine erneute Prüfung.
 
 **Download:** [Installer und ZIP unter Releases](https://github.com/GaleR-Tech/FTN-Coop/releases).
 Zum Spielen ist kein Umgang mit dem Quellcode nötig.
+
+Wenn dir die Mod gefällt, kannst du die Entwicklung mit einem Kaffee unterstützen:
+
+<a href="https://buymeacoffee.com/galertech"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee – GaleR Tech unterstützen" width="217" height="60"></a>
 
 **Nutzungsbedingungen:** Der Quellcode ist öffentlich einsehbar, aber keine
 Open-Source-Freigabe. Unverändertes privates, nichtkommerzielles Spielen ist
@@ -29,7 +33,7 @@ PowerShell. Steam muss laufen; das Steam-Overlay muss für Einladungen verfügba
 
 ## Installation
 
-Am einfachsten mit **FTN-Coop-0.1.0-dev-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.1.1-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -55,6 +59,18 @@ in `override.cfg`. Originale EXE/PCK bleiben unverändert. Bestehende Einstellun
 und andere Mod-Dateien werden bei der Entfernung berücksichtigt.
 
 ## Mit Freunden spielen
+
+Neu in 0.1.1: Beim Beitritt zeigt das F2-Menü den tatsächlich empfangenen Anteil
+der Weltdaten und anschließend getrennt den Weltaufbau und Fortschrittsabgleich.
+Die Prozentzahl beschreibt den Datenempfang. Erst nach dem anschließenden Aufbau
+und Abgleich ist die Sitzung spielbereit.
+
+Nach erfolgreichem Speichern erscheint eine Bestätigung mit Uhrzeit.
+**Fehlerbericht kopieren** legt einen kurzen technischen Bericht in die
+Zwischenablage. Er enthält Mod-/Demo-Version, Engine-Version, Sitzungsstatus,
+Spielerzahl, Ladephase und einen bekannten Fehlercode. Spielernamen, Steam-IDs,
+Pfade, Sitzungskennungen und Spielstände werden nicht aufgenommen. Der Bericht
+wird nicht automatisch versendet; du kannst ihn vor dem Teilen prüfen.
 
 1. Der **Host** lädt oder beginnt zuerst seinen normalen Spielstand.
 2. F2 → **Sitzung erstellen** → **Freunde einladen** öffnet die Steam-Einladung.

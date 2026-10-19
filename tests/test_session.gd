@@ -14,13 +14,13 @@ func run(_tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []
 	var transport: Node = load("res://tests/fixtures/fake_transport.gd").new()
 	var session: Node = load("res://mods/ftn_coop/session.gd").new()
-	session.configure(transport, "25963876", "0.1.0-dev")
+	session.configure(transport, "25963876", "0.1.1")
 	if not session.host().ok or session.state != session.State.CREATING:
 		errors.append("Hosting must wait for the asynchronous lobby callback.")
 	transport.hosted.emit(42)
 	if session.state != session.State.LOBBY or session.roster.size() != 1:
 		errors.append("A created lobby must register its host.")
-	var hello := {"protocol": 1, "build": "25963876", "mod_version": "0.1.0-dev", "name": "Friend"}
+	var hello := {"protocol": 1, "build": "25963876", "mod_version": "0.1.1", "name": "Friend"}
 	for peer_id in [2, 3, 4]:
 		transport.connected.emit(peer_id)
 		if not session.accept_hello(peer_id, hello).ok:
