@@ -1,6 +1,43 @@
 extends RefCounted
 
-func run(_tree: SceneTree) -> Array[String]:
+class VisualField extends Node:
+	var eye := Vector3.INF
+	func tick_lod(value: Vector3) -> void: eye = value
+
+class HayDetail extends Node:
+	var eye := Vector3.INF
+	func tick(value: Vector3) -> void: eye = value
+
+class VisualWorld extends Node:
+	var detail := HayDetail.new()
+	func _init() -> void: add_child(detail)
+
+class VisualPlayer extends Node3D:
+	var camera := Camera3D.new()
+	func _init() -> void: add_child(camera)
+
+class Countdown extends Node3D:
+	var _shown := -1
+	var seconds := 3600
+	var _lit := MeshInstance3D.new()
+	func _init() -> void: add_child(_lit)
+	func remaining() -> int: return seconds
+	func format_clock(value: int) -> String: return str(value)
+	func _on_for(text: String) -> Array[String]: return [text]
+	func _mesh(on: Array[String]) -> ArrayMesh:
+		var mesh := ArrayMesh.new()
+		mesh.resource_name = on[0]
+		return mesh
+
+class BayDoor extends Node:
+	var countdown := Countdown.new()
+	func _init() -> void: add_child(countdown)
+
+class ClockWorld extends Node:
+	var bay_door := BayDoor.new()
+	func _init() -> void: add_child(bay_door)
+
+func run(tree: SceneTree) -> Array[String]:
 	if not FileAccess.file_exists("res://mods/ftn_coop/game_bindings.gd") or not FileAccess.file_exists("res://mods/ftn_coop/game_adapter.gd"):
 		return ["Game adapter and capability verification are not implemented yet."]
 	var bindings: RefCounted = load("res://mods/ftn_coop/game_bindings.gd").new()
@@ -85,6 +122,8 @@ func run(_tree: SceneTree) -> Array[String]:
 			errors.append("A guest must preserve host fuel and peak money even when the native save loader normalizes them.")
 		normalizing.free()
 	live_state_checks(errors)
+	await guest_visual_checks(tree,errors)
+	guest_clock_checks(errors)
 	var snapshot := {"version":1,"state":{},"heights":PackedFloat32Array([0.0,0.0,0.0,0.0]),"player":Transform3D.IDENTITY,"buildings":[],"props":[],"belts":{},"tech":{},"cell":2.0,"extent":1.0}
 	if not fresh._snapshot_valid(snapshot): errors.append("A correctly sized native grid must remain valid.")
 	unsafe_snapshot_grid_checks(fresh,snapshot,errors)
@@ -95,6 +134,47 @@ func run(_tree: SceneTree) -> Array[String]:
 	unsafe_snapshot.cell = 0.0
 	if fresh._snapshot_valid(unsafe_snapshot): errors.append("Invalid native world dimensions must fail before native world allocation.")
 	return errors
+
+func guest_visual_checks(tree: SceneTree, errors: Array[String]) -> void:
+	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
+	var world := VisualWorld.new()
+	var field := VisualField.new()
+	var player := VisualPlayer.new()
+	world.add_child(field)
+	world.add_child(player)
+	tree.root.add_child(world)
+	await tree.process_frame
+	player.position = Vector3(-8,2,14)
+	player.camera.position = Vector3(0,1.5,0)
+	adapter.nodes = {"world":world,"field":field,"player":player}
+	adapter.guest_mode = true
+	adapter.pump_guest_visuals()
+	if field.eye!=Vector3(-8,3.5,14) or world.detail.eye!=Vector3(-8,3.5,14):
+		errors.append("Guest hay shells and nearby straw must follow the current local camera, including the first frame after joining.")
+	player.position = Vector3(5,2,3)
+	adapter.pump_guest_visuals()
+	if field.eye!=Vector3(5,3.5,3) or world.detail.eye!=Vector3(5,3.5,3):
+		errors.append("Moving the guest must refresh both native hay detail layers without advancing world simulation.")
+	world.free()
+
+func guest_clock_checks(errors: Array[String]) -> void:
+	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
+	var world := ClockWorld.new()
+	var clock: Node = world.bay_door.countdown
+	adapter.nodes = {"world":world}
+	adapter.guest_mode = true
+	var result: Dictionary = adapter.apply_confirmed_event({"patch":{"countdown":{"seconds":120}}})
+	if not result.ok or clock._shown!=120 or clock._lit.mesh==null or clock._lit.mesh.resource_name!="120":
+		errors.append("The guest gate must display the host countdown instead of its own profile's remaining time.")
+	else:
+		var mesh: Mesh = clock._lit.mesh
+		adapter.apply_confirmed_event({"patch":{"countdown":{"seconds":120}}})
+		if clock._lit.mesh!=mesh: errors.append("An unchanged countdown must reuse its digit mesh.")
+	if clock.seconds!=3600: errors.append("Shared gate time must not rewrite the guest's personal profile countdown.")
+	for invalid in [{"seconds":-1},{"seconds":86401},{"seconds":1.5},{"seconds":5,"extra":true}]:
+		if adapter.apply_confirmed_event({"patch":{"countdown":invalid}}).ok:
+			errors.append("Malformed shared countdowns must be rejected before native drawing.")
+	world.free()
 
 func live_state_checks(errors: Array[String]) -> void:
 	var replica: Script = load("res://tests/fixtures/replica_boundary.gd")

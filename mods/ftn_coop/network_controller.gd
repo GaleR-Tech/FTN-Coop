@@ -33,6 +33,7 @@ var _resync_pending := false
 var _resync_attempts := 0
 var _world_retries: Dictionary = {}
 var version_mismatch: Dictionary = {}
+var recovery_reason := ""
 var _mod_version := ""
 var _sync_wait := 0.0
 var _markers: RefCounted
@@ -81,11 +82,13 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 
 func host() -> Dictionary:
 	leave()
+	recovery_reason = ""
 	if save_session.closing or save_session.guest_open: return _error("GUEST_SESSION_BUSY")
 	return session.host()
 
 func join(lobby_id: int) -> Dictionary:
 	leave()
+	recovery_reason = ""
 	if save_session.closing or save_session.guest_open: return _error("GUEST_SESSION_BUSY")
 	return session.join(lobby_id)
 
@@ -325,6 +328,9 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 			var received: Dictionary = _receiver.receive(1,body)
 			if not received.ok and received.code not in ["STALE_REVISION","TRANSFER_MISMATCH"]: _request_resync(received.code)
 		"EVENT":
+			# Reliable packets already in flight can belong to the replaced world.
+			# The host buffers new events until this baseline has finished loading.
+			if not _baseline_received or _loading: return
 			var applied: Dictionary = world_sync.accept_event(1,body)
 			if applied.ok: _sync_wait = 0.0
 		"WORLD_READY":
@@ -404,6 +410,7 @@ func _on_transfer_progress(received: int, total: int) -> void:
 func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	if session.is_host: return
 	if state.get("mode")=="event" and state.get("event") is Dictionary:
+		if not _baseline_received or _loading: return
 		world_sync.accept_event(1,state.event)
 		return
 	if _loading or state.get("mode")!="world" or not state.get("native") is Dictionary or not state.get("frame") is Dictionary: return
@@ -475,6 +482,7 @@ func _queue_event(peer: int, event: Dictionary) -> void:
 func _request_resync(reason: String="") -> void:
 	if _leaving or session.is_host or _resync_pending or connection_id.is_empty(): return
 	if reason.is_empty(): reason = world_sync.last_resync_reason
+	recovery_reason = reason if not reason.is_empty() else "UNKNOWN"
 	print("[FTN-Coop] World resynchronization requested: "+(reason if not reason.is_empty() else "UNKNOWN"))
 	_resync_attempts += 1
 	if _resync_attempts>3:

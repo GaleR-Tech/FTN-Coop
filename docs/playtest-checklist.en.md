@@ -2,14 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.5.1 · Demo build 25963876 · Updated 20 October 2026.
+Version 0.5.2 · Demo build 25963876 · Updated 20 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
 - [ ] Both use the same demo build and mod version. First verify Linux/Proton locally if either uses Linux.
-- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.5.1 and restart, joining can be retried.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.5.2 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -48,17 +48,17 @@ Internet verification below. No one has been contacted or invited automatically.
 Record the date, demo build, mod version, participant count, Internet connections
 and exact steps when an error occurs. Do not copy account credentials or complete
 save files into a public report. Until this checklist has been passed with real
-accounts, Internet operation remains unverified even though 0.5.1 uses the normal GitHub release label.
+accounts, Internet operation remains unverified even though 0.5.2 uses the normal GitHub release label.
 
-## Linux 0.5.1 verification
+## Linux 0.5.2 verification
 
 - [ ] Run the downloaded Linux installer on Ubuntu or Mint; check both languages and a folder with spaces.
 - [ ] Test install, update from an existing version, and removal; verify unchanged saves, other mods and original game files.
 - [ ] Start V66 through Steam Proton; verify F2, Steam overlay, invitations and world loading.
-- [ ] Test Windows-host/Linux-guest, then Linux-host/Windows-guest, with matching 0.5.1 packages.
+- [ ] Test Windows-host/Linux-guest, then Linux-host/Windows-guest, with matching 0.5.2 packages.
 - [ ] Record distribution, Python version, Proton version and result. These Linux checks have not yet been completed.
 
-## Guest controls and synchronization in 0.5.1
+## Guest controls and synchronization in 0.5.2
 
 - [ ] Sprint with Shift until stamina is depleted; release and recover. Try a personal remapping.
 - [ ] Open native B / Tab / T / Escape menus; movement stops, purchases debit the host once, and leaving cleans up the session.
@@ -68,9 +68,14 @@ accounts, Internet operation remains unverified even though 0.5.1 uses the norma
 - [ ] End hosting while a guest equips a shared tool; save and reload the host and verify the unlock remains.
 - [ ] For a Linux host crash, record Proton/distribution versions and capture a local Proton log. Review it for private information before sharing.
 
-## 0.5.1 regression checks
+## 0.5.2 regression checks
 
 - [ ] Host and guest carry hay simultaneously with separate shovels/forks; drop and throw on each side without moving the other's load.
 - [ ] Drop an empty tool; its copy stays on the ground and that player's hands remain empty until a deliberate new selection, including under Internet delay.
 - [ ] Select a conveyor in the native guest catalog, choose the first point and observe the length preview, then finish and see the resulting belt.
 - [ ] If the native loading screen reappears, record whether host/guest and the local FTN-Coop resynchronization/loading log messages; this issue is still unconfirmed.
+
+- [ ] Immediately after joining and while walking around the pile, close straw detail follows the guest camera without a frozen patch.
+- [ ] Right-click a loaded shovel/fork: only the contents leave; the tool stays equipped. Test F and Q separately, including several rapid presses without selecting the tool again.
+- [ ] Compare the gate countdown on host and guest after joining and after host pause/resume. Check that the guest's own profile time was not overwritten.
+- [ ] During recovery, old in-flight world events must not restart native loading. Copy a failure report and check its recovery cause before sharing.

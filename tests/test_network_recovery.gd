@@ -94,6 +94,39 @@ func run(tree: SceneTree) -> Array[String]:
 		errors.append("A missing final world confirmation must time out and close the temporary guest world.")
 	_dispose(guest)
 	await tree.process_frame
+	errors.append_array(await _late_events_during_recovery(tree))
+	return errors
+
+func _late_events_during_recovery(tree: SceneTree) -> Array[String]:
+	var errors: Array[String] = []
+	var guest := _guest(tree)
+	guest.controller.join(42)
+	guest.wire.connected.emit(1)
+	_deliver(guest.controller,"WELCOME",_welcome())
+	guest.controller.world_sync.accept_baseline(1)
+	guest.controller._baseline_received = true
+	guest.controller._request_resync("SNAPSHOT_INVALID")
+	if guest.controller.get("recovery_reason")!="SNAPSHOT_INVALID": errors.append("A recovery failure must preserve its initial cause for the copied report.")
+	var sender: Node = load("res://mods/ftn_coop/snapshot_transfer.gd").new()
+	var transfer: Dictionary = sender.begin({"mode":"world","native":{"money":20},"frame":{"money":20}},"0123456789abcdef0123456789abcdef",4)
+	_deliver(guest.controller,"SNAPSHOT_BEGIN",transfer.value.frames[0])
+	_deliver(guest.controller,"EVENT",{"revision":3,"patch":{"money":999}})
+	if guest.controller._resync_attempts!=1:
+		errors.append("Events left over from the previous world must not restart recovery while a replacement snapshot arrives.")
+	for frame in transfer.value.frames.slice(1): _deliver(guest.controller,"SNAPSHOT_CHUNK",frame)
+	# Both regular and fragmented old events can finish while native loading awaits.
+	_deliver(guest.controller,"EVENT",{"revision":3,"patch":{"money":999}})
+	guest.controller._on_snapshot_completed({"mode":"event","event":{"revision":3,"patch":{"money":999}}},3)
+	if guest.controller._resync_attempts!=1:
+		errors.append("Old regular or fragmented events must not interrupt asynchronous replacement-world loading.")
+	await tree.create_timer(0.05).timeout
+	_deliver(guest.controller,"EVENT",{"revision":5,"patch":{"money":30}})
+	_deliver(guest.controller,"WORLD_READY",{"stage":"caught_up","revision":5})
+	if guest.controller.session.state!=guest.controller.session.State.PLAYING or guest.game.world.get("money")!=30:
+		errors.append("Fresh catch-up events must apply after the replacement baseline and complete the recovery.")
+	sender.free()
+	_dispose(guest)
+	await tree.process_frame
 	return errors
 
 func _guest(tree: SceneTree) -> Dictionary:

@@ -58,6 +58,7 @@ const EN := {
 	"Alle müssen dieselbe Mod-Version installieren und die Demo neu starten.":"Everyone must install the same mod version and restart the demo.",
 	"Mod-Downloads öffnen":"Open mod downloads",
 	"Lobby-Mod-Version: %s\n":"Lobby mod version: %s\n",
+	"Abgleichgrund: %s\n":"Recovery reason: %s\n",
 	"Sitzung erstellen":"Create session",
 	"Freunde einladen":"Invite friends",
 	"Gemeinsamen Fortschritt speichern":"Save shared progress",

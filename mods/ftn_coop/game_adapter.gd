@@ -36,6 +36,8 @@ var _guest_quest: Dictionary = {}
 var _shared_tools_scope: RefCounted
 var _props_replica: RefCounted
 var _local_peer := 0
+var _guest_countdown: Dictionary = {}
+var _countdown_world_id := 0
 
 func probe(root: Node) -> Dictionary:
 	if root == null or not is_instance_valid(root):
@@ -491,6 +493,11 @@ func _perform_action(actor: Node, kind: String, payload: Dictionary) -> Dictiona
 			if not bool(nodes.tech.call("buy",id)): return _error("PURCHASE_REFUSED")
 		"item_interact":
 			match payload.get("operation"):
+				"secondary":
+					var event := InputEventAction.new()
+					event.action = "secondary"
+					event.pressed = true
+					actor.call("_unhandled_input",event)
 				"pick":
 					if not try_shared_tool_pickup(actor): actor.get("carry").call("try_pick",false)
 				"drop":
@@ -536,6 +543,12 @@ func _live_frame() -> Dictionary:
 		last_sync_error = settings.code
 		return {}
 	frame.settings = settings.value
+	if guest_mode:
+		if not _guest_countdown.is_empty(): frame.countdown = _guest_countdown.duplicate()
+	else:
+		var countdown: Variant = _countdown_node()
+		if countdown is Node and countdown.has_method("remaining"):
+			frame.countdown = {"seconds":clampi(int(countdown.call("remaining")),0,86400)}
 	var missions: Node = nodes.world.get("missions")
 	if guest_mode:
 		if not _guest_quest.is_empty(): frame.quest = _guest_quest.duplicate(true)
@@ -617,6 +630,8 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	nodes.saves.set("block_save",_guest_save_block)
 	if _loose != null: _loose.close()
 	_guest_quest.clear()
+	_guest_countdown.clear()
+	_countdown_world_id = 0
 	_props_replica = null
 	_local_peer = 0
 	_quest_world_id = 0
@@ -804,6 +819,7 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 	if patch.has("quest"):
 		_guest_quest = patch.quest.duplicate(true)
 		_refresh_guest_quests(nodes.state.call("to_dict"))
+	if patch.has("countdown"): _apply_countdown(patch.countdown)
 	if patch.has("tech"): nodes.tech.call("from_dict",patch.tech,false)
 	var moved := PackedInt32Array()
 	if patch.has("heights"):
@@ -835,6 +851,23 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		var loose_result: Dictionary = _loose_module().apply(patch.loose,nodes.world.get_tree().root)
 		if not loose_result.ok: return loose_result
 	return _ok()
+
+func _countdown_node() -> Variant:
+	if not nodes.has("world") or not is_instance_valid(nodes.world): return null
+	var door: Variant = nodes.world.get("bay_door")
+	return door.get("countdown") if door is Node and is_instance_valid(door) else null
+
+func _apply_countdown(value: Dictionary) -> void:
+	var countdown: Variant = _countdown_node()
+	if not countdown is Node or not countdown.get("_lit") is MeshInstance3D: return
+	if _guest_countdown==value and _countdown_world_id==countdown.get_instance_id(): return
+	# Draw with the game's own digits. Its refresh/tick also reads and advances
+	# the personal Profile countdown, which must remain independent on guests.
+	var text: String = countdown.call("format_clock",value.seconds)
+	countdown.get("_lit").mesh = countdown.call("_mesh",countdown.call("_on_for",text))
+	countdown.set("_shown",value.seconds)
+	_guest_countdown = value.duplicate()
+	_countdown_world_id = countdown.get_instance_id()
 
 func _apply_guest_state(authoritative: Dictionary) -> void:
 	var state: Node = nodes.state
@@ -901,6 +934,12 @@ func pump_guest_visuals() -> void:
 		var camera: Variant = nodes.player.get("camera")
 		if nodes.has("props") and camera is Camera3D and _props_replica!=null:
 			_props_replica.follow_local(nodes.props,_local_peer,camera.global_transform)
+		if camera is Camera3D and camera.is_inside_tree():
+			var eye: Vector3 = camera.global_position
+			if nodes.field.has_method("tick_lod"): nodes.field.call("tick_lod",eye)
+			if nodes.has("world"):
+				var detail: Variant = nodes.world.get("detail")
+				if detail is Node and detail.has_method("tick"): detail.call("tick",eye)
 	# Finish only native rendering jobs, never guest physics/production steps.
 	for method in ["_land_jobs","_finish_chunks","_land_cells","_flush_dirty"]:
 		if nodes.field.has_method(method): nodes.field.call(method)
@@ -915,9 +954,11 @@ func _patch_valid(patch: Dictionary) -> bool:
 	native.erase("quest")
 	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","tech","heights","field","buildings","props","held_props","belts","loose","settings","quest"]: return false
-		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","settings":"cfg","quest":"world"}[key]
+		if key not in ["state","tech","heights","field","buildings","props","held_props","belts","loose","settings","quest","countdown"]: return false
+		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","settings":"cfg","quest":"world","countdown":"world"}[key]
 		if not nodes.has(role): return false
+		if key=="countdown":
+			if not patch[key] is Dictionary or patch[key].size()!=1 or typeof(patch[key].get("seconds"))!=TYPE_INT or patch[key].seconds<0 or patch[key].seconds>86400: return false
 		if key=="quest":
 			var quest: Variant = patch[key]
 			if not quest is Dictionary or quest.size()!=2 or typeof(quest.get("index"))!=TYPE_INT or quest.index<0 or quest.index>100000 or not quest.get("progress") is Dictionary: return false

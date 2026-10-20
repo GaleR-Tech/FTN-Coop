@@ -157,6 +157,7 @@ func _save() -> void:
 	else: ui.show_saved()
 
 func _copy_report() -> void:
+	ui.set_recovery_reason(network.recovery_reason)
 	DisplayServer.clipboard_set(ui.diagnostic_report())
 	ui.show_report_copied()
 

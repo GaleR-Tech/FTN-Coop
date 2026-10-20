@@ -105,6 +105,7 @@ var _load_total := 0
 var _report_build := "unbekannt"
 var _report_version := "unbekannt"
 var _last_problem: Dictionary = {}
+var _recovery_reason := ""
 var _locale: RefCounted
 var _language_selector: OptionButton
 var _error_code := ""
@@ -323,12 +324,17 @@ func _report_context() -> Dictionary:
 	var state: int = clampi(int(_session.state),0,5) if _session!=null else 0
 	return {"state":states[state],"role":"keine" if state==0 else ("Host" if _session.is_host else "Gast"),"players":clampi(_session.roster.size(),0,4) if _session!=null else 0,"stage":_load_stage,"received":_load_received,"total":_load_total,"error":"KEIN_FEHLER"}
 
+func set_recovery_reason(code: String) -> void:
+	var allowed := ["REVISION_GAP","SNAPSHOT_INVALID","CHECKSUM_MISMATCH","DECOMPRESSION_FAILED","TRANSFER_TIMEOUT","WORLD_TOO_LARGE","CHUNK_CONFLICT","INVALID_PAYLOAD","LOOSE_INVALID","SETTINGS_INVALID","UNKNOWN"]
+	_recovery_reason = code if code in allowed else ""
+
 func diagnostic_report() -> String:
 	# Only fixed fields and allowlisted values; never dump session/adapter data.
 	var context: Dictionary = _last_problem if not _last_problem.is_empty() else _report_context()
 	var engine: Dictionary = Engine.get_version_info()
 	var report: String = tr_text("FTN-Koop Fehlerbericht\nMod-Version: %s\nDemo-Build: %s\nGodot: %d.%d.%d\nSystem: %s\nSitzung: %s\nRolle: %s\nSpieler: %d / 4\nLadephase: %s\nEmpfangene Bytes: %d / %d\nFehler: %s\nInternettest: ausstehend\n") % [tr_text(_report_version),tr_text(_report_build),int(engine.major),int(engine.minor),int(engine.patch),"Windows" if OS.get_name()=="Windows" else tr_text("anderes"),context.state,tr_text(context.role),context.players,context.stage,context.received,context.total,context.error]
 	if context.has("required_mod_version"): report += tr_text("Lobby-Mod-Version: %s\n") % context.required_mod_version
+	if not _recovery_reason.is_empty(): report += tr_text("Abgleichgrund: %s\n") % _recovery_reason
 	return report
 
 func set_load_progress(stage: String, received: int, total: int) -> void:

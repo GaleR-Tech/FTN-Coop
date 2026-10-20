@@ -45,6 +45,19 @@ func run(tree: SceneTree) -> Array[String]:
 			if not report.contains(required): errors.append("Diagnostics lost useful failure context: "+required)
 		for forbidden in ["PRIVATE_NAME","C:/Users/SECRET","76561190000000000"]:
 			if report.contains(forbidden): errors.append("Diagnostics exposed personal/session data.")
+		if not ui.has_method("set_recovery_reason"):
+			errors.append("Copied recovery failures must retain the specific cause of the replacement world request.")
+		else:
+			ui.set_recovery_reason("SNAPSHOT_INVALID")
+			if not ui.diagnostic_report().contains("Abgleichgrund: SNAPSHOT_INVALID"):
+				errors.append("Recovery diagnostics must include the stable cause code.")
+			ui.set_language("en")
+			if not ui.diagnostic_report().contains("Recovery reason: SNAPSHOT_INVALID"):
+				errors.append("Recovery diagnostics must translate the label while preserving the code.")
+			ui.set_language("de")
+			ui.set_recovery_reason("PRIVATE_NAME C:/Users/SECRET")
+			if ui.diagnostic_report().contains("PRIVATE_NAME") or ui.diagnostic_report().contains("C:/Users/SECRET"):
+				errors.append("Recovery reasons must be allowlisted instead of copying arbitrary data into reports.")
 		ui.configure_diagnostics("PRIVATE_BUILD\nC:/secret","PRIVATE_VERSION")
 		ui.show_error("PRIVATE_ERROR_TOKEN")
 		report = ui.diagnostic_report()

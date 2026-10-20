@@ -55,6 +55,8 @@ class LoadedPlayer extends Player:
 	var carry := EmptyHands.new()
 	var load_amount := 54
 	func drop_active_tool() -> void: load_amount = 0
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventAction and event.action=="secondary" and event.pressed: load_amount = 0
 	func _init() -> void:
 		if build.get_parent()==null: add_child(build)
 		add_child(hand)
@@ -109,6 +111,11 @@ func run(_tree: SceneTree) -> Array[String]:
 	adapter._perform_action(player,"place",{"id":"cabinet"})
 	if player.build.placed!=1: errors.append("Successive placement clicks must preserve the native multi-step build operation.")
 	var loaded := LoadedPlayer.new()
+	loaded.current_tool = 1
+	var secondary: Dictionary = adapter._perform_action(loaded,"item_interact",{"operation":"secondary"})
+	if not secondary.ok or loaded.load_amount!=0 or loaded.current_tool!=1:
+		errors.append("A guest secondary action must use native emptying behavior while keeping the equipped tool.")
+	loaded.load_amount = 54
 	adapter._perform_action(loaded,"item_interact",{"operation":"drop"})
 	if loaded.load_amount!=0: errors.append("Drop must use the native active-tool route, including a loaded shovel.")
 	if loaded.hand.load_amount!=0 or loaded.carry.load_amount!=0: errors.append("Dropping the active tool must also release independent hand and carried objects.")
