@@ -1,13 +1,13 @@
 # FTN-Koop · Internettest noch offen
 
-Version 0.3.0 · Demo-Build 25963876 · Stand 20.10.2026.
+Version 0.4.0 · Demo-Build 25963876 · Stand 20.10.2026.
 Lokale echte Demo-Prozesse sind getrennt vom folgenden Internetnachweis zu bewerten.
 Niemand wurde automatisch angeschrieben oder eingeladen.
 
 ## Zuerst zwei Personen
 
-- [ ] Beide verwenden Windows, denselben Demo-Build und dasselbe Mod-Paket.
-- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.3.0 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
+- [ ] Beide verwenden denselben Demo-Build und dieselbe Mod-Version. Bei Linux zuerst den lokalen Proton-Test durchführen.
+- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.4.0 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
 - [ ] Beide starten über Steam mit verschiedenen Konten an verschiedenen Rechnern
       und Internetanschlüssen; Steam-Overlay ist verfügbar.
 - [ ] Host lädt einen eigenen Teststand, erstellt eine private Sitzung und lädt ein.
@@ -46,4 +46,12 @@ Niemand wurde automatisch angeschrieben oder eingeladen.
 Datum, Demo-Build, Mod-Version, Teilnehmerzahl, Internetanschlüsse und genaue Schritte
 bei einem Fehler festhalten. Keine Kontozugangsdaten oder vollständigen Spielstände
 in einen öffentlichen Bericht kopieren. Bis diese Liste mit echten Konten bestanden
-ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.3.0 die normale GitHub-Release-Kennzeichnung verwendet.
+ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.4.0 die normale GitHub-Release-Kennzeichnung verwendet.
+
+## Linux-Prüfung für 0.4.0
+
+- [ ] Heruntergeladenen Linux-Installer unter Ubuntu/Mint starten; beide Sprachen und einen Ordner mit Leerzeichen prüfen.
+- [ ] Installation, Update einer bestehenden Version und Entfernung testen; Spielstände, andere Mods und Original-Spiel-Dateien prüfen.
+- [ ] V66 über Steam Proton starten; F2, Steam-Overlay, Einladungen und Laden der Welt prüfen.
+- [ ] Windows-Host/Linux-Gast und danach Linux-Host/Windows-Gast mit identischer Version 0.4.0 testen.
+- [ ] Distribution, Python-Version, Proton-Version und Ergebnis festhalten. Diese Linux-Prüfungen sind noch offen.

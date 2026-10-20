@@ -36,9 +36,9 @@ func run(tree: SceneTree) -> Array[String]:
 		session.is_host = false
 		ui._refresh()
 		if not ui._preset_apply.disabled or not ui._preset_save.disabled or ui._preset_name.editable: errors.append("Guest preset editing must stay locked with existing host ownership.")
-		ui.set_update_result({"ok":true,"code":"OK","value":{"version":"0.4.0","status":"newer"}})
+		ui.set_update_result({"ok":true,"code":"OK","value":{"version":"0.5.0","status":"newer"}})
 		ui.set_language("en")
-		if not ui._update_status.text.contains("0.4.0") or not ui._update_download.visible: errors.append("A newer release needs a translated status and a download link.")
+		if not ui._update_status.text.contains("0.5.0") or not ui._update_download.visible: errors.append("A newer release needs a translated status and a download link.")
 		ui.set_update_result({"ok":false,"code":"UPDATE_CONNECTION","value":null})
 		if ui._update_download.visible or ui.is_panel_open(): errors.append("A failed update check must not offer a false update or interrupt gameplay.")
 		session.state = session.State.OFFLINE
@@ -78,7 +78,7 @@ func _runtime_controls(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var wire: Node = load("res://tests/fixtures/pipe_transport.gd").new()
 	tree.root.add_child(runtime)
-	runtime.configure(game,wire,"25963876","0.3.0")
+	runtime.configure(game,wire,"25963876","0.4.0")
 	var path := "user://ftn-runtime-presets-"+str(Time.get_ticks_usec())+".dat"
 	runtime._presets.configure(path)
 	runtime.start_host()

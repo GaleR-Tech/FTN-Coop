@@ -22,8 +22,8 @@ func run(tree: SceneTree) -> Array[String]:
 	var host: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	var runtime: Node = load("res://mods/ftn_coop/coop_runtime.gd").new()
 	for node in [a,host,runtime]: tree.root.add_child(node)
-	host.configure(a,host_game,"25963876","0.3.0")
-	runtime.configure(guest_game,b,"25963876","0.3.0")
+	host.configure(a,host_game,"25963876","0.4.0")
+	runtime.configure(guest_game,b,"25963876","0.4.0")
 	if not runtime.has_method("rejoin_last_session"):
 		errors.append("The runtime must offer a cleanup-gated explicit rejoin action.")
 	else:

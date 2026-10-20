@@ -2,14 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.3.0 · Demo build 25963876 · Updated 20 October 2026.
+Version 0.4.0 · Demo build 25963876 · Updated 20 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
-- [ ] Both use Windows, the same demo build and the same mod package.
-- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.3.0 and restart, joining can be retried.
+- [ ] Both use the same demo build and mod version. First verify Linux/Proton locally if either uses Linux.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.4.0 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -48,4 +48,12 @@ Internet verification below. No one has been contacted or invited automatically.
 Record the date, demo build, mod version, participant count, Internet connections
 and exact steps when an error occurs. Do not copy account credentials or complete
 save files into a public report. Until this checklist has been passed with real
-accounts, Internet operation remains unverified even though 0.3.0 uses the normal GitHub release label.
+accounts, Internet operation remains unverified even though 0.4.0 uses the normal GitHub release label.
+
+## Linux 0.4.0 verification
+
+- [ ] Run the downloaded Linux installer on Ubuntu or Mint; check both languages and a folder with spaces.
+- [ ] Test install, update from an existing version, and removal; verify unchanged saves, other mods and original game files.
+- [ ] Start V66 through Steam Proton; verify F2, Steam overlay, invitations and world loading.
+- [ ] Test Windows-host/Linux-guest, then Linux-host/Windows-guest, with matching 0.4.0 packages.
+- [ ] Record distribution, Python version, Proton version and result. These Linux checks have not yet been completed.

@@ -10,7 +10,8 @@ $exact = @('.gitignore','.github/FUNDING.yml','CHANGELOG.md','README.md','README
 $utf8 = [Text.UTF8Encoding]::new($false,$true)
 foreach ($file in $files) {
     $allowed = $file -cin $exact -or $file -cmatch '^mods/ftn_coop/[a-z_]+\.gd$' -or
-        $file -cmatch '^tests/(fixtures/)?[a-z0-9_]+\.(gd|tscn|ps1)$' -or $file -cmatch '^tools/[A-Za-z]+\.ps1$'
+        $file -cmatch '^tests/(fixtures/)?[a-z0-9_]+\.(gd|tscn|ps1|py)$' -or $file -cmatch '^tools/[A-Za-z]+\.ps1$' -or
+        $file -cmatch '^installer/linux_(core|setup|main)\.py$'
     if (-not $allowed) { throw ('PUBLICATION_FILE_NOT_ALLOWED: '+$file) }
     $path = Join-Path $root $file
     $bytes = [IO.File]::ReadAllBytes($path)

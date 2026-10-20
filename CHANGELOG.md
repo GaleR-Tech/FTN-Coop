@@ -1,5 +1,23 @@
 # Changelog / Änderungen
 
+## 0.4.0 · 2026-10-20
+
+### English
+
+- Added a single-file Linux installer for Ubuntu/Mint with Steam Proton, automatic Steam/additional-library/Flatpak folder discovery and manual folder selection.
+- Added optional English/German graphical controls plus a terminal interface for installation, updates and removal. Python 3.8+ is required; python3-tk enables the window. All mod files are included; no pip packages or installer downloads are needed.
+- Preserved installation records, original configuration bytes, later unrelated config edits, other mods and local mod edits. Linked target paths and malformed records are rejected; ordinary failed writes are rolled back.
+- Added GitHub and Buy me a Coffee links to the Linux interface. The Windows installer and runtime use the same 0.4.0 version; every participant must update and restart.
+- Verified the Python filesystem, package and GUI tests on Windows. Actual Linux execution, Proton gameplay and Windows/Linux multiplayer remain unverified. Internet play between different Steam accounts remains unverified.
+
+### Deutsch
+
+- Einzelnen Linux-Installer für Ubuntu/Mint mit Steam Proton, automatischer Suche in Steam-/Zusatz-/Flatpak-Bibliotheken und manueller Ordnerauswahl ergänzt.
+- Optionale grafische Bedienung auf Englisch/Deutsch und Terminal-Oberfläche für Installation, Update und Entfernung ergänzt. Python 3.8+ wird benötigt; python3-tk ermöglicht das Fenster. Alle Mod-Dateien sind enthalten; keine pip-Pakete oder Downloads während der Installation nötig.
+- Installationsdateien, ursprüngliche Konfigurationsbytes, spätere fremde Konfigurationseinträge, andere Mods und lokale Mod-Änderungen werden erhalten. Verknüpfte Zielpfade und ungültige Installationsdateien werden abgewiesen; gewöhnliche Schreibfehler werden zurückgerollt.
+- GitHub- und Buy-me-a-Coffee-Links in der Linux-Oberfläche ergänzt. Windows-Installer und Mod verwenden dieselbe Version 0.4.0; alle Teilnehmer müssen aktualisieren und neu starten.
+- Python-Datei-, Paket- und Oberflächentests unter Windows geprüft. Echte Linux-Ausführung, Proton-Spielbetrieb und gemeinsame Windows/Linux-Sitzungen sind noch unbestätigt. Internetspiel mit getrennten Steam-Konten bleibt unbestätigt.
+
 ## 0.3.0 · 2026-10-20
 
 ### English

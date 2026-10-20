@@ -58,8 +58,8 @@ func _routing(tree: SceneTree) -> Array[String]:
 	a.other = b
 	b.other = a
 	for node in [a,b,host,guest]: tree.root.add_child(node)
-	host.configure(a,host_game,"25963876","0.3.0")
-	guest.configure(b,guest_game,"25963876","0.3.0")
+	host.configure(a,host_game,"25963876","0.4.0")
+	guest.configure(b,guest_game,"25963876","0.4.0")
 	var flood_bounded := [true]
 	guest_game.restore_started.connect(func():
 		var codec: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()

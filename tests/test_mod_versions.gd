@@ -11,14 +11,14 @@ func run(tree: SceneTree) -> Array[String]:
 		return ["Version mismatch needs safe local/lobby version details and an update hint."]
 	var errors: Array[String] = []
 	var version: Script = load("res://mods/ftn_coop/mod_version.gd")
-	if version.safe_version("0.3.0")!="0.3.0" or version.DOWNLOAD_URL!="https://github.com/GaleR-Tech/FTN-Coop/releases":
+	if version.safe_version("0.4.0")!="0.4.0" or version.DOWNLOAD_URL!="https://github.com/GaleR-Tech/FTN-Coop/releases":
 		errors.append("Version details must use exact versions and the project's fixed download page.")
-	for bad in [null,1,{},"https://evil.invalid","0.3.0\nPRIVATE_NAME","<script>","x".repeat(1000)]:
+	for bad in [null,1,{},"https://evil.invalid","0.4.0\nPRIVATE_NAME","<script>","x".repeat(1000)]:
 		if not version.safe_version(bad).is_empty(): errors.append("Untrusted version text must not reach the update hint.")
 	var wire: Node = load("res://mods/ftn_coop/steam_transport.gd").new()
 	var steam := LobbySteam.new()
 	wire._steam = steam
-	wire.mod_version = "0.3.0"
+	wire.mod_version = "0.4.0"
 	wire._pending_join = 42
 	wire._join_generation = wire._generation
 	var failed: Array = []
@@ -29,10 +29,10 @@ func run(tree: SceneTree) -> Array[String]:
 	wire.free()
 	var ui: Node = load("res://mods/ftn_coop/coop_ui.gd").new()
 	tree.root.add_child(ui)
-	ui.configure_diagnostics("25963876","0.3.0")
+	ui.configure_diagnostics("25963876","0.4.0")
 	ui.set_language("en")
 	ui.show_error("MOD_MISMATCH",{"required":"0.1.1"})
-	if not ui.error_text().contains("0.3.0") or not ui.error_text().contains("0.1.1") or not ui._update.visible:
+	if not ui.error_text().contains("0.4.0") or not ui.error_text().contains("0.1.1") or not ui._update.visible:
 		errors.append("The English rejection must show installed/required versions and the download button.")
 	ui.set_language("de")
 	if not ui.error_text().contains("Installiert:") or not ui.error_text().contains("0.1.1"):
@@ -44,7 +44,7 @@ func run(tree: SceneTree) -> Array[String]:
 	if ui._update.visible: errors.append("Clearing the version error must hide its download button.")
 	ui.queue_free()
 	await tree.process_frame
-	for remote in ["0.1.1","0.4.0",""]:
+	for remote in ["0.1.1","0.5.0",""]:
 		errors.append_array(await _reject_over_wire(tree,remote))
 	return errors
 
@@ -61,7 +61,7 @@ func _reject_over_wire(tree: SceneTree, guest_version: String) -> Array[String]:
 		var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 		tree.root.add_child(wire)
 		tree.root.add_child(controller)
-		controller.configure(wire,game,"25963876","0.3.0" if index==0 else guest_version)
+		controller.configure(wire,game,"25963876","0.4.0" if index==0 else guest_version)
 		controllers.append(controller)
 		wires.append(wire)
 		games.append(game)
@@ -77,7 +77,7 @@ func _reject_over_wire(tree: SceneTree, guest_version: String) -> Array[String]:
 	await tree.process_frame
 	controllers[1].join(42)
 	for frame in range(12): await tree.process_frame
-	if not problems.has("MOD_MISMATCH") or details.is_empty() or details[0].get("required")!="0.3.0":
+	if not problems.has("MOD_MISMATCH") or details.is_empty() or details[0].get("required")!="0.4.0":
 		errors.append("The real HELLO/REJECT route lost the required host version for "+guest_version)
 	if controllers[1].session.state!=controllers[1].session.State.OFFLINE or controllers[1].save_session.guest_open:
 		errors.append("Different versions must never open a guest world.")

@@ -1,8 +1,8 @@
-# FTN-Koop · 0.3.0
+# FTN-Koop · 0.4.0
 
 [English](README.en.md) · Deutsch
 
-Eigene, inoffizielle Koop-Mod für **Find The Needle Demo unter Windows**.
+Eigene, inoffizielle Koop-Mod für **Find The Needle Demo** (Windows; Linux-Installer für Steam Proton).
 Ein Host und bis zu drei Freunde arbeiten in derselben Welt. Geld, Forschung,
 Heu, Gebäude und Nadeln gehören zur gemeinsamen Sitzung.
 
@@ -45,7 +45,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.3.0-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.4.0-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -69,6 +69,51 @@ Alternativ funktioniert weiterhin das ZIP-Paket:
 Die Installation ergänzt eigene Dateien unter `mods/ftn_coop` und einen Eintrag
 in `override.cfg`. Originale EXE/PCK bleiben unverändert. Bestehende Einstellungen
 und andere Mod-Dateien werden bei der Entfernung berücksichtigt.
+
+## Linux-Installation (Ubuntu / Mint)
+
+Neu in **0.4.0**: **FTN-Coop-0.4.0-Linux.run** unter Releases herunterladen.
+Die einzelne Datei enthält den Installer und alle Mod-Dateien. Benötigt werden
+**Python 3.8 oder neuer** und für das optionale Fenster **python3-tk**; zusätzliche
+pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schließen.
+
+1. Windows-Demo über Steam installieren und in den Steam-Eigenschaften der Demo
+   ein Proton-Kompatibilitätswerkzeug aktivieren. Das Paket enthält kein natives Linux-Spiel.
+2. Im Terminal in den Download-Ordner wechseln und starten:
+
+   ```sh
+   python3 FTN-Coop-0.4.0-Linux.run
+   ```
+
+3. Erkannten Demo-Ordner prüfen oder über **Ordner auswählen** ändern. **Installieren**
+   bzw. **Aktualisieren** anklicken. Das Fenster bietet auch **Mod entfernen**,
+   Sprachwahl sowie GitHub- und Buy-me-a-Coffee-Links. Mit dem normalen Benutzerkonto
+   ausführen, ohne sudo.
+4. Demo über Steam mit Proton starten und **F2** drücken.
+
+Ohne grafisches Fenster steht die Terminal-Oberfläche bereit:
+
+```sh
+python3 FTN-Coop-0.4.0-Linux.run --cli
+```
+
+Einen bestimmten Ordner mit `--install --game-dir "/pfad/zu/Find The Needle Demo"`
+angeben; zum Entfernen `--remove` anstelle von `--install` verwenden. Die Sprache
+lässt sich mit `--language de` oder `--language en` wählen. Steam-Bibliotheken,
+weitere Bibliothekspfade und der übliche Flatpak-Steam-Ordner werden automatisch
+gesucht. Flatpak muss bereits Zugriff auf die ausgewählte Bibliothek haben.
+
+Updates behalten die bisherige Installationsdatei und überschreiben keine lokal
+geänderten Mod-Dateien. Beim Entfernen wird die unveränderte ursprüngliche
+Konfiguration bytegenau wiederhergestellt oder nur der eigene Eintrag aus einer
+später bearbeiteten Konfiguration entfernt. Original-Spiel-Dateien, Spielstände
+und andere Mods bleiben erhalten. Der Installer lädt nichts nach.
+
+**Prüfgrenze:** Datei-, Paket- und Oberflächentests liefen auf dem Windows-
+Entwicklungsrechner. Ausführung unter Ubuntu/Mint, Desktop-Integration,
+Proton-Spielbetrieb und gemeinsame Windows/Linux-Sitzungen benötigen noch einen
+echten Linux-Test. Alle Teilnehmer brauchen **0.4.0** und Demo-Build **25963876**.
+Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
 
 ## Mit Freunden spielen
 
@@ -162,7 +207,7 @@ Abfragen sind einmal pro Minute möglich; ohne Verbindung oder bei einem
 Anfragelimit bleibt das Spiel benutzbar. Spielernamen, Steam-IDs, Lobbykennungen,
 lokale Pfade, Fehlerberichte und Spielstände werden nicht mitgeschickt.
 
-0.3.0 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
+0.4.0 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
 getrennten Steam-Konten bleibt unbestätigt.
 
 ## Speichern und Verlassen

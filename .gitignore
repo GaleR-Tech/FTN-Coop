@@ -27,3 +27,5 @@ docs/*
 *.tmp
 *.pem
 *.key
+__pycache__/
+*.py[cod]

@@ -1,4 +1,4 @@
-FTN-Coop 0.3.0
+FTN-Coop 0.4.0
 
 The archive contains original FTN-Coop GDScript, installation scripts and
 documentation, provided under the accompanying restrictive LICENSE.
