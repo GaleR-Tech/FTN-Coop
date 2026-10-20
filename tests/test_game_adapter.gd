@@ -1,5 +1,7 @@
 extends RefCounted
 
+const RenderFieldBase = preload("res://tests/fixtures/render_field.gd")
+
 class VisualField extends Node:
 	var eye := Vector3.INF
 	func tick_lod(value: Vector3) -> void: eye = value
@@ -113,6 +115,13 @@ func run(tree: SceneTree) -> Array[String]:
 		patch = {"state":{"money":-999.0},"field":{"indices":PackedInt32Array([99]),"values":PackedFloat32Array([0.5])}}
 		if fresh.apply_confirmed_event({"patch":patch}).code != "SNAPSHOT_INVALID" or state.data.money != 7.0:
 			errors.append("Invalid field indices must reject the entire update before changing money.")
+		field.dirtied = PackedInt32Array()
+		fresh.apply_confirmed_event({"patch":{"heights":field.heights.duplicate()}})
+		if not field.dirtied.is_empty(): errors.append("An unchanged baseline height grid must not requeue every native straw cell after loading.")
+		var replacement: PackedFloat32Array = field.heights.duplicate()
+		replacement[2] = 0.5
+		fresh.apply_confirmed_event({"patch":{"heights":replacement}})
+		if field.dirtied!=PackedInt32Array([2]): errors.append("A full baseline must dirty only height vertices that actually changed during native restoration.")
 		field.free()
 		state.free()
 		var normalizing: Node = replica.NormalizingState.new()
@@ -123,6 +132,7 @@ func run(tree: SceneTree) -> Array[String]:
 		normalizing.free()
 	live_state_checks(errors)
 	await guest_visual_checks(tree,errors)
+	guest_field_checks(errors)
 	guest_clock_checks(errors)
 	var snapshot := {"version":1,"state":{},"heights":PackedFloat32Array([0.0,0.0,0.0,0.0]),"player":Transform3D.IDENTITY,"buildings":[],"props":[],"belts":{},"tech":{},"cell":2.0,"extent":1.0}
 	if not fresh._snapshot_valid(snapshot): errors.append("A correctly sized native grid must remain valid.")
@@ -134,6 +144,48 @@ func run(tree: SceneTree) -> Array[String]:
 	unsafe_snapshot.cell = 0.0
 	if fresh._snapshot_valid(unsafe_snapshot): errors.append("Invalid native world dimensions must fail before native world allocation.")
 	return errors
+
+func guest_field_checks(errors: Array[String]) -> void:
+	if not FileAccess.file_exists("res://mods/ftn_coop/guest_field.gd"):
+		errors.append("Guest hay must run the complete native render frame while blocking settling and end-of-pile simulation.")
+		return
+	var driver: RefCounted = load("res://mods/ftn_coop/guest_field.gd").new()
+	# Supply a native boundary with the same method signatures, independent of
+	# the protected game's implementation and assets.
+	var fixture: Script = RenderFieldBase
+	var installed: Dictionary = driver.install(fixture)
+	if not installed.ok:
+		errors.append("The field subclass must be registered before native worker ownership begins.")
+		return
+	if load("res://tests/fixtures/render_field.gd")!=installed.value or installed.value.get_base_script()!=fixture:
+		errors.append("Resource takeover must return the registered subclass while retaining the original native base.")
+	var field: RenderFieldBase = installed.value.new()
+	field.call("_process",0.016)
+	if field.get("heights")[0]<=1.0: errors.append("Registering the field subclass must preserve ordinary host simulation by default.")
+	field.set("heights",PackedFloat32Array([1.0,2.0]))
+	field.set("rendered",0)
+	var guard: Dictionary = driver.configure(field)
+	if not guard.ok:
+		errors.append("The native render guard must install without losing field data: "+guard.code)
+	else:
+		driver.configure(field)
+		if field.get("joined")!=1: errors.append("Repeated guest configuration must not restart field ownership or settling joins.")
+		driver.pump(0.016)
+		if field.get("rendered")!=1 or field.get("heights")!=PackedFloat32Array([1.0,2.0]):
+			errors.append("Guest rendering must advance without any native settling, worker result or last-of-pile mutation.")
+		driver.restore()
+		if field.get_script()!=installed.value or field.get("_ftn_guest_field")!=false: errors.append("Leaving guest mode must restore simulation without replacing a live field script instance.")
+		var replacement: Node = installed.value.new()
+		driver.configure(field)
+		driver.configure(replacement)
+		if field.get("_ftn_guest_field")!=false or replacement.get("_ftn_guest_field")!=true: errors.append("A resync must move the guest guard to the replacement field without replacing either script instance.")
+		var unrelated := Node.new()
+		if driver.configure(unrelated).ok or replacement.get("_ftn_guest_field")!=true: errors.append("A failed field configuration must leave the current valid guard intact.")
+		unrelated.free()
+		replacement.free()
+		driver.pump(0.016)
+		driver.restore()
+	field.free()
 
 func guest_visual_checks(tree: SceneTree, errors: Array[String]) -> void:
 	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()

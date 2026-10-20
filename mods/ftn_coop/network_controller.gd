@@ -22,6 +22,8 @@ var _preparing: Dictionary = {}
 var _connections: Dictionary = {}
 var _peer_epochs: Dictionary = {}
 var _tx: Array[Dictionary] = []
+var _tx_bytes := 0
+var _send_blocked: Dictionary = {}
 var _epoch := 0
 var _sequence := 0
 var _poll_due := 0.0
@@ -47,6 +49,8 @@ var _status_announced_at: Dictionary = {}
 var _last_equipment_sequence := 0
 var _last_build_sequence := 0
 var _equipment_epochs: Dictionary = {}
+var _pose_serial := 0
+var _last_pose_serial: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -98,6 +102,8 @@ func leave() -> void:
 	_epoch += 1
 	save_session.close()
 	_tx.clear()
+	_tx_bytes = 0
+	_send_blocked.clear()
 	_preparing.clear()
 	for record in _pending.values(): record.transfer.queue_free()
 	_pending.clear()
@@ -126,6 +132,8 @@ func leave() -> void:
 	_last_equipment_sequence = 0
 	_last_build_sequence = 0
 	_equipment_epochs.clear()
+	_pose_serial = 0
+	_last_pose_serial.clear()
 	_sync_wait = 0.0
 	_receiver.cancel()
 	load_progress.emit("idle",0,0)
@@ -166,11 +174,21 @@ func _on_session_outgoing(peer: int, kind: String, body: Dictionary) -> void:
 func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> Dictionary:
 	if _tx.size()>=8192: return _error("SEND_LIMIT")
 	var data := body.duplicate(true)
+	if kind=="POSE":
+		_pose_serial += 1
+		data.serial = _pose_serial
 	data._connection = _connections.get(peer,"") if session.is_host else connection_id
 	var cookie: String = "" if kind=="HELLO" else session.session_id
 	var encoded: Dictionary = _protocol.encode({"protocol":1,"type":kind,"session":cookie,"body":data})
 	if not encoded.ok: return encoded
-	_tx.append({"peer":peer,"channel":0 if reliable else 1,"bytes":encoded.value,"reliable":reliable})
+	if not reliable:
+		for index in range(_tx.size()-1,-1,-1):
+			if _tx[index].peer==peer and not _tx[index].reliable and _tx[index].get("pose_actor",0)==int(body.get("peer",0)):
+				_tx_bytes -= _tx[index].bytes.size()
+				_tx.remove_at(index)
+	if _tx_bytes+encoded.value.size()>256*1024*1024: return _error("SEND_LIMIT")
+	_tx.append({"peer":peer,"channel":0 if reliable else 1,"bytes":encoded.value,"reliable":reliable,"pose_actor":int(body.get("peer",0)) if not reliable else 0})
+	_tx_bytes += encoded.value.size()
 	return _ok()
 
 func _process(delta: float) -> void:
@@ -213,11 +231,40 @@ func _process(delta: float) -> void:
 	for peer in _pending.keys():
 		_pending[peer].age += delta
 		if _pending[peer].age>120.0: _fail("TRANSFER_TIMEOUT",peer)
-	for index in range(12):
-		if _tx.is_empty(): break
-		var packet: Dictionary = _tx.pop_front()
+	_drain_packets(delta)
+
+func _drain_packets(delta: float) -> void:
+	var blocked := {}
+	var index := 0
+	var attempts := 0
+	var epoch := _epoch
+	while index<_tx.size() and attempts<12:
+		var packet: Dictionary = _tx[index]
+		if blocked.has(packet.peer):
+			index += 1
+			continue
+		attempts += 1
 		var sent: Dictionary = _transport.send(packet.peer,packet.channel,packet.bytes,packet.reliable)
+		if epoch!=_epoch: return
+		if not sent.ok and sent.code=="WOULD_BLOCK":
+			blocked[packet.peer] = true
+			_send_blocked[packet.peer] = float(_send_blocked.get(packet.peer,0.0))+delta
+			if _send_blocked[packet.peer]>=120.0:
+				_fail("TRANSFER_TIMEOUT",packet.peer if session.is_host else 0)
+				return
+			index += 1
+			continue
+		_tx_bytes -= packet.bytes.size()
+		_tx.remove_at(index)
+		_send_blocked.erase(packet.peer)
 		if not sent.ok: _fail(sent.code,packet.peer if session.is_host else 0)
+		if epoch!=_epoch: return
+
+func _discard_packets(peer: int) -> void:
+	_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
+	_tx_bytes = 0
+	for packet in _tx: _tx_bytes += packet.bytes.size()
+	_send_blocked.erase(peer)
 
 func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 	if _leaving or session.state==session.State.OFFLINE: return
@@ -267,7 +314,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 						_pending[peer].transfer.queue_free()
 						_pending.erase(peer)
 					# No pieces of the replaced baseline may remain in our queue.
-					_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
+					_discard_packets(peer)
 					session.roster[peer].state = "syncing"
 					world_sync.set_ready(peer,false)
 					_start_world(peer)
@@ -292,6 +339,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				_queue(peer,"ACTION_RESULT",result)
 			"POSE":
 				if session.roster[peer].state!="playing" or not body.get("pose") is Dictionary: return
+				if not _accept_pose_serial(peer,body): return
 				if _adapter.has_method("update_actor_pose"):
 					if not _update_actor_pose(peer,body.pose).ok: return
 				if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
@@ -339,7 +387,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				session.mark_world_ready(_transport.local_peer_id())
 		"ROSTER": session.accept_welcome(1,{"session_id":session.session_id,"player_id":_transport.local_peer_id(),"roster":body.get("roster"),"mod_version":_mod_version})
 		"POSE":
-			if typeof(body.get("peer"))==TYPE_INT and body.get("pose") is Dictionary and session.roster.has(body.peer): pose_received.emit(body.peer,body.pose)
+			if typeof(body.get("peer"))==TYPE_INT and body.get("pose") is Dictionary and session.roster.has(body.peer) and _accept_pose_serial(peer,body): pose_received.emit(body.peer,body.pose)
 		"ACTION_RESULT":
 			if typeof(body.get("sequence"))!=TYPE_INT or body.sequence<=0 or not body.get("ok") is bool or not body.get("code") is String: return
 			if body.ok and body.sequence>_last_equipment_sequence and body.get("equipment") is Dictionary and _adapter.has_method("apply_local_equipment"):
@@ -354,6 +402,12 @@ func _local_equipment_pose(pose: Dictionary) -> Dictionary:
 	var tagged := pose.duplicate()
 	tagged.equipment_epoch = _last_equipment_sequence
 	return tagged
+
+func _accept_pose_serial(peer: int, body: Dictionary) -> bool:
+	var actor: int = peer if session.is_host else body.peer
+	if typeof(body.get("serial"))!=TYPE_INT or body.serial<=int(_last_pose_serial.get(actor,0)): return false
+	_last_pose_serial[actor] = body.serial
+	return true
 
 func _update_actor_pose(peer: int, pose: Dictionary) -> Dictionary:
 	var epoch: Variant = pose.get("equipment_epoch",0)
@@ -454,8 +508,8 @@ func _finish_world(peer: int, body: Dictionary) -> void:
 	_publish_collaboration()
 
 func _on_confirmed(event: Dictionary) -> void:
-	for peer in session.roster:
-		if peer==1 or not session.roster[peer].accepted: continue
+	for peer in session.roster.keys():
+		if peer==1 or not session.roster.has(peer) or not session.roster[peer].accepted: continue
 		if _pending.has(peer):
 			var buffered: Dictionary = _pending[peer].transfer.buffer_event(event)
 			if not buffered.ok: _fail(buffered.code,peer)
@@ -496,6 +550,8 @@ func _request_resync(reason: String="") -> void:
 	_queue(1,"WORLD_REQUEST",{})
 
 func _on_roster_changed() -> void:
+	for actor in _last_pose_serial.keys():
+		if not session.roster.has(actor): _last_pose_serial.erase(actor)
 	if not session.is_host or _leaving: return
 	for departed in _peer_stages.keys():
 		if not session.roster.has(departed):
@@ -526,9 +582,10 @@ func _on_disconnected(peer: int) -> void:
 	if _pending.has(peer):
 		_pending[peer].transfer.queue_free()
 		_pending.erase(peer)
-	_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
+	_discard_packets(peer)
 	world_sync.remove_peer(peer)
 	_equipment_epochs.erase(peer)
+	_last_pose_serial.erase(peer)
 	_adapter.remove_actor(peer)
 	if session.is_host: _publish_collaboration()
 

@@ -1,6 +1,6 @@
 extends Node
 
-const VERSION := "0.5.2"
+const VERSION := "0.6.0"
 const REQUIRED_CAPABILITIES := [
 	"snapshot_capture", "snapshot_restore", "action_capture", "host_apply",
 	"guest_mutation_guard", "machine_host_only", "player_pose", "isolated_guest_session", "host_save",
@@ -18,6 +18,10 @@ var _locale: RefCounted
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Register the field subclass before the first world creates worker jobs.
+	var field_guard: Dictionary = load(get_script().resource_path.get_base_dir()+"/guest_field.gd").install()
+	if not field_guard.ok and ResourceLoader.exists("res://scripts/hay/hay_field.gd"):
+		push_warning("[FTN-Coop] Native field render guard could not be registered; guest worlds will reject this field.")
 	_locale = load(get_script().resource_path.get_base_dir()+"/locale.gd").new()
 	_locale.load_preferences()
 	print("[FTN-Coop] own bootstrap loaded; version=" + VERSION)

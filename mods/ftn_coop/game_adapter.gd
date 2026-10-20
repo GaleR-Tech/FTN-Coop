@@ -38,6 +38,7 @@ var _props_replica: RefCounted
 var _local_peer := 0
 var _guest_countdown: Dictionary = {}
 var _countdown_world_id := 0
+var _guest_field: RefCounted
 
 func probe(root: Node) -> Dictionary:
 	if root == null or not is_instance_valid(root):
@@ -618,10 +619,13 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 				_collision_tree.node_added.connect(_guard_collision_node)
 				_collision_tree.node_removed.connect(_forget_guest_collider)
 			_guard_collision_branch(nodes.world)
-		return _ok()
+		return _prepare_guest_field()
 	# Restoring persistence requires the lifecycle's explicit origin restoration.
 	if not _save_origin.is_empty(): return _error("GUEST_SESSION_ACTIVE")
 	restore_shared_settings()
+	if _guest_field!=null:
+		_guest_field.restore()
+		_guest_field = null
 	_restore_guest_collisions()
 	if has_world:
 		nodes.world.process_mode = _world_mode
@@ -638,6 +642,16 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	_quest_index = -1
 	guest_mode = false
 	return _ok()
+
+func _prepare_guest_field() -> Dictionary:
+	if not nodes.has("field"): return _ok()
+	if _guest_field==null:
+		# A render-only boundary needs no simulation guard. A native field must
+		# carry the startup hook even if a cached original changed resource path.
+		if not nodes.field.has_method("_settle"): return _ok()
+		if not nodes.field.has_method("ftn_set_guest_field"): return _error("CAPABILITY_MISSING")
+		_guest_field = load(MODULE_DIR+"/guest_field.gd").new()
+	return _guest_field.configure(nodes.field)
 
 func _guard_collision_branch(node: Node) -> void:
 	_guard_collision_node(node)
@@ -700,8 +714,7 @@ func restore_guest_world(state: Dictionary, session_id: String) -> Dictionary:
 		var current: Node = tree.current_scene
 		if current != null and current.scene_file_path == scene_path and bool(current.get("_built")):
 			bind(tree.root)
-			set_guest_mode(true)
-			return _ok()
+			return set_guest_mode(true)
 	return _error("NATIVE_RELOAD_TIMEOUT")
 
 func cancel_guest_restore() -> void:
@@ -823,9 +836,10 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 	if patch.has("tech"): nodes.tech.call("from_dict",patch.tech,false)
 	var moved := PackedInt32Array()
 	if patch.has("heights"):
+		var previous: PackedFloat32Array = nodes.field.get("heights")
+		for index in range(patch.heights.size()):
+			if previous[index]!=patch.heights[index]: moved.append(index)
 		nodes.field.set("heights",patch.heights.duplicate())
-		moved.resize(patch.heights.size())
-		for index in range(moved.size()): moved[index] = index
 	elif patch.has("field"):
 		var heights: PackedFloat32Array = nodes.field.get("heights")
 		for index in range(patch.field.indices.size()): heights[patch.field.indices[index]] = patch.field.values[index]
@@ -940,9 +954,7 @@ func pump_guest_visuals() -> void:
 			if nodes.has("world"):
 				var detail: Variant = nodes.world.get("detail")
 				if detail is Node and detail.has_method("tick"): detail.call("tick",eye)
-	# Finish only native rendering jobs, never guest physics/production steps.
-	for method in ["_land_jobs","_finish_chunks","_land_cells","_flush_dirty"]:
-		if nodes.field.has_method(method): nodes.field.call(method)
+	if _guest_field!=null: _guest_field.pump(nodes.field.get_process_delta_time())
 
 func _patch_valid(patch: Dictionary) -> bool:
 	# Cross-field checks below must never depend on wire dictionary order.

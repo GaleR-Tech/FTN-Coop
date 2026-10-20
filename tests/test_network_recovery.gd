@@ -95,7 +95,27 @@ func run(tree: SceneTree) -> Array[String]:
 	_dispose(guest)
 	await tree.process_frame
 	errors.append_array(await _late_events_during_recovery(tree))
+	var ordered := _guest(tree)
+	ordered.controller.join(42)
+	ordered.wire.connected.emit(1)
+	var welcome := _welcome()
+	welcome.roster.append({"id":3,"name":"Other","state":"playing","accepted":true})
+	_deliver(ordered.controller,"WELCOME",welcome)
+	var seen: Array[int] = []
+	ordered.controller.pose_received.connect(func(_peer: int,pose: Dictionary): seen.append(int(pose.position.x)))
+	_deliver_pose(ordered.controller,2,2)
+	_deliver_pose(ordered.controller,1,3,3)
+	_deliver_pose(ordered.controller,1,1)
+	if seen!=[2,3]: errors.append("True unreliable Steam movement must discard older poses per actor while preserving reordered poses of other actors.")
+	_dispose(ordered)
+	await tree.process_frame
 	return errors
+
+func _deliver_pose(controller: Node, serial: int, x: int, actor: int=1) -> void:
+	var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
+	var body := {"peer":actor,"pose":{"position":Vector3(x,0,0)},"serial":serial,"_connection":"fedcba9876543210fedcba9876543210"}
+	var encoded: Dictionary = protocol.encode({"protocol":1,"type":"POSE","session":"0123456789abcdef0123456789abcdef","body":body})
+	controller._on_message(1,1,encoded.value)
 
 func _late_events_during_recovery(tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []

@@ -1,5 +1,25 @@
 # Changelog / Änderungen
 
+## 0.6.0 · 2026-10-20
+
+### English
+
+- Reliable world packets now use Steam's checked send API. A full send buffer retains the packet for a later attempt in the same order; other guests can continue receiving. This addresses the reproduced missing-revision recovery loop under load.
+- Movement uses actual unreliable Steam delivery. Waiting poses are coalesced separately for each player, and older reordered poses are discarded per player.
+- Guest hay uses the complete native rendering scheduler. A subclass registered before fields are created blocks guest settling and last-of-pile simulation while retaining native mesh workers. Existing script instances are never replaced during play or reconnect.
+- Full baselines dirty only genuinely changed height vertices. Unchanged restored geometry no longer queues a rebuild of the entire pile.
+- Tests cover send saturation, large fragmented changes followed by small revisions, multiple player streams, native hay rendering, unchanged authoritative heights and repeated joins. Private probes and original game assets are excluded from every package.
+- Everyone must install 0.6.0, restart the demo and use a fresh invitation if the host has recreated the lobby. LOBBY_NOT_FOUND means the old Steam lobby is no longer available. Linux/Proton crash resolution and Internet operation with separate accounts remain unverified.
+
+### Deutsch
+
+- Zuverlässige Weltmeldungen nutzen jetzt die Steam-Sendefunktion mit geprüftem Ergebnis. Bei vollem Sendepuffer bleibt das Paket bis zum nächsten Versuch in derselben Reihenfolge erhalten; andere Gäste können weiter Daten empfangen. Damit wird die nachgestellte Schleife aus fehlenden Änderungen und erneutem Weltladen unter Last behoben.
+- Bewegungen verwenden tatsächlich unzuverlässige Steam-Übertragung. Wartende Positionen werden pro Spieler zusammengefasst; verspätete ältere Positionen werden pro Spieler verworfen.
+- Gäste nutzen den vollständigen nativen Zeichenablauf für Heu. Eine vor dem Erzeugen der Felder registrierte Unterklasse sperrt Setzphysik und automatische Haufen-Endaktionen beim Gast und erhält die nativen Zeichenaufträge. Laufende Skriptinstanzen werden weder im Spiel noch beim Wiederbeitritt ersetzt.
+- Vollständige Ausgangsdaten markieren nur tatsächlich geänderte Höhen. Unveränderte geladene Geometrie löst keinen unnötigen Neuaufbau des gesamten Haufens mehr aus.
+- Prüfungen decken volle Sendepuffer, große aufgeteilte Änderungen vor kleinen Folgemeldungen, mehrere Spielerströme, native Heudarstellung, unveränderte Host-Höhen und wiederholte Beitritte ab. Private Diagnoseprogramme und Originalspieldateien bleiben aus allen Paketen ausgeschlossen.
+- Alle müssen 0.6.0 installieren und die Demo neu starten. Hat der Host die Lobby neu erstellt, ist eine neue Einladung erforderlich. LOBBY_NOT_FOUND bedeutet, dass die alte Steam-Lobby nicht mehr verfügbar ist. Die Behebung von Linux-/Proton-Abstürzen und der Internetbetrieb mit getrennten Konten bleiben unbestätigt.
+
 ## 0.5.2 · 2026-10-20
 
 ### English

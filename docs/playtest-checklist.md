@@ -1,13 +1,13 @@
 # FTN-Koop · Internettest noch offen
 
-Version 0.5.2 · Demo-Build 25963876 · Stand 20.10.2026.
+Version 0.6.0 · Demo-Build 25963876 · Stand 20.10.2026.
 Lokale echte Demo-Prozesse sind getrennt vom folgenden Internetnachweis zu bewerten.
 Niemand wurde automatisch angeschrieben oder eingeladen.
 
 ## Zuerst zwei Personen
 
 - [ ] Beide verwenden denselben Demo-Build und dieselbe Mod-Version. Bei Linux zuerst den lokalen Proton-Test durchführen.
-- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.5.2 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
+- [ ] Eine ältere Mod-Version wird mit installierter/benötigter Version und Download-Link abgewiesen; nach Installation von 0.6.0 bei beiden und einem Neustart lässt sich der Beitritt erneut versuchen.
 - [ ] Beide starten über Steam mit verschiedenen Konten an verschiedenen Rechnern
       und Internetanschlüssen; Steam-Overlay ist verfügbar.
 - [ ] Host lädt einen eigenen Teststand, erstellt eine private Sitzung und lädt ein.
@@ -46,17 +46,17 @@ Niemand wurde automatisch angeschrieben oder eingeladen.
 Datum, Demo-Build, Mod-Version, Teilnehmerzahl, Internetanschlüsse und genaue Schritte
 bei einem Fehler festhalten. Keine Kontozugangsdaten oder vollständigen Spielstände
 in einen öffentlichen Bericht kopieren. Bis diese Liste mit echten Konten bestanden
-ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.5.2 die normale GitHub-Release-Kennzeichnung verwendet.
+ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.6.0 die normale GitHub-Release-Kennzeichnung verwendet.
 
-## Linux-Prüfung für 0.5.2
+## Linux-Prüfung für 0.6.0
 
 - [ ] Heruntergeladenen Linux-Installer unter Ubuntu/Mint starten; beide Sprachen und einen Ordner mit Leerzeichen prüfen.
 - [ ] Installation, Update einer bestehenden Version und Entfernung testen; Spielstände, andere Mods und Original-Spiel-Dateien prüfen.
 - [ ] V66 über Steam Proton starten; F2, Steam-Overlay, Einladungen und Laden der Welt prüfen.
-- [ ] Windows-Host/Linux-Gast und danach Linux-Host/Windows-Gast mit identischer Version 0.5.2 testen.
+- [ ] Windows-Host/Linux-Gast und danach Linux-Host/Windows-Gast mit identischer Version 0.6.0 testen.
 - [ ] Distribution, Python-Version, Proton-Version und Ergebnis festhalten. Diese Linux-Prüfungen sind noch offen.
 
-## Gaststeuerung und Weltabgleich in 0.5.2
+## Gaststeuerung und Weltabgleich in 0.6.0
 
 - [ ] Mit Umschalt bis zur leeren Ausdauer sprinten, loslassen und erholen; auch eine eigene Tastenbelegung testen.
 - [ ] Originalmenüs mit B / Tab / T / Escape öffnen: Bewegung ruht, Käufe belasten den Host genau einmal, Verlassen räumt die Sitzung auf.
@@ -66,7 +66,7 @@ ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.5.2 die normale GitHub
 - [ ] Hosting mit ausgerüstetem Gastwerkzeug beenden; Host speichern und neu laden, Freischaltung bleibt vorhanden.
 - [ ] Bei Linux-Host-Absturz Proton-/Distributionsversion festhalten und lokal ein Proton-Protokoll erzeugen. Vor Weitergabe auf private Daten prüfen.
 
-## Rückfallprüfungen für 0.5.2
+## Rückfallprüfungen für 0.6.0
 
 - [ ] Host und Gast tragen gleichzeitig Heu mit getrennten Schaufeln/Mistgabeln; auf beiden Seiten ablegen und werfen, ohne die Last des anderen zu verändern.
 - [ ] Leeres Werkzeug ablegen: Die Kopie liegt am Boden, die Hand bleibt bis zur bewussten neuen Auswahl leer, auch bei Internetverzögerung.
@@ -77,3 +77,12 @@ ist, bleibt der Internetbetrieb unbestätigt, auch wenn 0.5.2 die normale GitHub
 - [ ] Geladene Schaufel/Mistgabel per Rechtsklick leeren: Nur der Inhalt geht ab, das Werkzeug bleibt ausgerüstet. F und Q getrennt testen, auch mehrere schnelle Betätigungen ohne erneute Werkzeugauswahl.
 - [ ] Tor-Restzeit bei Host und Gast nach dem Beitritt und nach Host-Pause/Fortsetzen vergleichen. Die eigene Profilzeit des Gasts darf nicht überschrieben werden.
 - [ ] Beim Wiederabgleich dürfen alte unterwegs befindliche Weltmeldungen das normale Laden nicht neu starten. Fehlerbericht kopieren und den Abgleichgrund vor dem Teilen prüfen.
+
+## 0.6.0: Sendepuffer und native Heudarstellung
+
+- [ ] Der Host bewegt sich während des Gastbeitritts; der Gast erreicht das Spiel ohne erneuten normalen Ladebildschirm.
+- [ ] Mit langsamer Verbindung oder ungefähr 500 ms Verzögerung wiederholen; Käufe und Heuänderungen bleiben in Reihenfolge.
+- [ ] Haufen direkt nach Beitritt, nach Heuabbau und nach Wiederbeitritt vergleichen; über entferntem Heu bleibt keine dauerhafte schwebende Strohschicht.
+- [ ] In einer Vier-Spieler-Lobby bewegen sich alle; ein langsamer Gast blockiert weder andere Gäste noch die Bewegungen einzelner Spieler.
+- [ ] Host-Lobby neu erstellen und mit neuer Einladung beitreten. Eine alte geschlossene Lobby darf LOBBY_NOT_FOUND melden.
+- [ ] Mit Linux-/Proton-Host und getrennten Steam-Konten über das Internet wiederholen; diese Umgebungen sind durch die lokalen Windows-Prüfungen nicht bestätigt.

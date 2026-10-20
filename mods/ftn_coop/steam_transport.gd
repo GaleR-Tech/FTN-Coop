@@ -8,7 +8,7 @@ signal message_received(peer_id: int, channel: int, bytes: PackedByteArray)
 signal invite_received(lobby_id: int)
 
 var build := "25963876"
-var mod_version := "0.5.2"
+var mod_version := "0.6.0"
 var lobby_id := 0
 var _steam: Object
 var _peer: MultiplayerPeer
@@ -22,6 +22,7 @@ var _wired := false
 var _connecting_time := 0.0
 var _version_mismatch: Dictionary = {}
 var _polling := false
+var _connection_handles: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -78,9 +79,22 @@ func send(peer_id: int, channel: int, bytes: PackedByteArray, reliable: bool) ->
 		return _error("NOT_CONNECTED")
 	if peer_id <= 0 or channel < 0 or channel > 1 or bytes.is_empty() or bytes.size() > 65536:
 		return _error("PACKET_INVALID")
+	if reliable:
+		# SteamPacketPeer::send discards SendMessages' per-message error. Use
+		# the same connection/lane with an API that reports a full send buffer.
+		var identity: int = _peer.call("get_steam_id_for_peer_id",peer_id)
+		for handle in _connection_handles:
+			if _connection_handles[handle]!=identity: continue
+			var info: Dictionary = _steam.call("getConnectionInfo",handle)
+			if info.get("connection_state")!=3 or info.get("identity")!=identity or info.get("user_data")!=peer_id: continue
+			var result: Dictionary = _steam.call("sendMessageToConnection",handle,bytes,8) # Steam reliable, lane 0.
+			if result.get("result")==25: return _error("WOULD_BLOCK")
+			return _ok(null) if result.get("result")==1 else _error("SEND_FAILED")
+		return _error("WOULD_BLOCK") # Connection callback can follow peer_connected.
 	_peer.set_target_peer(peer_id)
 	_peer.transfer_channel = channel
-	_peer.transfer_mode = MultiplayerPeer.TRANSFER_MODE_RELIABLE if reliable else MultiplayerPeer.TRANSFER_MODE_UNRELIABLE_ORDERED
+	# GodotSteam maps UNRELIABLE_ORDERED to RELIABLE, which queues old poses.
+	_peer.transfer_mode = MultiplayerPeer.TRANSFER_MODE_UNRELIABLE
 	return _ok(null) if _peer.put_packet(bytes) == OK else _error("SEND_FAILED")
 
 func reject_peer(peer_id: int) -> void:
@@ -90,6 +104,7 @@ func reject_peer(peer_id: int) -> void:
 
 func close() -> void:
 	_generation += 1
+	_connection_handles.clear()
 	var closing_peer := _peer
 	_peer = null
 	if closing_peer != null:
@@ -108,7 +123,7 @@ func _setup() -> Dictionary:
 	if not Engine.has_singleton("Steam") or not ClassDB.class_exists("SteamMultiplayerPeer"):
 		return _error("STEAM_UNSUPPORTED")
 	_steam = Engine.get_singleton("Steam")
-	for method in ["createLobby", "joinLobby", "leaveLobby", "setLobbyData", "getLobbyData", "getLobbyOwner", "activateGameOverlayInviteDialog", "getNumLobbyMembers", "getLobbyMemberByIndex", "setGlobalConfigValueInt32"]:
+	for method in ["createLobby", "joinLobby", "leaveLobby", "setLobbyData", "getLobbyData", "getLobbyOwner", "activateGameOverlayInviteDialog", "getNumLobbyMembers", "getLobbyMemberByIndex", "setGlobalConfigValueInt32", "sendMessageToConnection", "getConnectionInfo"]:
 		if not _steam.has_method(method):
 			return _error("STEAM_UNSUPPORTED")
 	if not is_inside_tree():
@@ -127,12 +142,13 @@ func _setup() -> Dictionary:
 	if _steam.call("setGlobalConfigValueInt32", key, 0) != true:
 		return _error("RELAY_UNSUPPORTED")
 	if not _wired:
-		for signal_name in ["lobby_created", "lobby_joined", "join_requested"]:
+		for signal_name in ["lobby_created", "lobby_joined", "join_requested", "network_connection_status_changed"]:
 			if not _steam.has_signal(signal_name):
 				return _error("STEAM_UNSUPPORTED")
 		_steam.connect("lobby_created", _on_lobby_created)
 		_steam.connect("lobby_joined", _on_lobby_joined)
 		_steam.connect("join_requested", _on_invite)
+		_steam.connect("network_connection_status_changed",_on_network_connection_status_changed)
 		_wired = true
 	return _ok(null)
 
@@ -218,6 +234,13 @@ func _on_peer_connected(peer_id: int) -> void:
 func _on_invite(target_lobby: int, _friend_id: int) -> void:
 	invite_received.emit(target_lobby)
 
+func _on_network_connection_status_changed(handle: int, info: Dictionary, _old_state: int) -> void:
+	if _peer==null: return
+	if info.get("connection_state")==3 and typeof(info.get("identity"))==TYPE_INT:
+		_connection_handles[handle] = info.identity
+	elif int(info.get("connection_state",0))>3:
+		_connection_handles.erase(handle)
+
 func _process(delta: float) -> void:
 	if _pending_host == _generation or (_pending_join != 0 and _join_generation == _generation):
 		_waiting += delta
@@ -251,7 +274,7 @@ func _process(delta: float) -> void:
 func _exit_tree() -> void:
 	close()
 	if _wired and is_instance_valid(_steam):
-		for pair in [["lobby_created", _on_lobby_created], ["lobby_joined", _on_lobby_joined], ["join_requested", _on_invite]]:
+		for pair in [["lobby_created", _on_lobby_created], ["lobby_joined", _on_lobby_joined], ["join_requested", _on_invite], ["network_connection_status_changed",_on_network_connection_status_changed]]:
 			if _steam.is_connected(pair[0], pair[1]):
 				_steam.disconnect(pair[0], pair[1])
 
