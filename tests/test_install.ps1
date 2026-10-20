@@ -23,14 +23,14 @@ $original = "[display]`r`nname=`"keep me`"`r`n[autoload]`r`nOtherMod=`"*mods/oth
 [System.IO.File]::WriteAllText($config, $original, [System.Text.UTF8Encoding]::new($true))
 $originalBytes = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($config))
 & $install -GameDir $game | Out-Null
-Require ((Get-Content -LiteralPath (Join-Path $game 'mods/ftn_coop/install-state.json') -Raw | ConvertFrom-Json).mod_version -eq '0.4.1') 'Installed metadata must record the package mod version.'
+Require ((Get-Content -LiteralPath (Join-Path $game 'mods/ftn_coop/install-state.json') -Raw | ConvertFrom-Json).mod_version -eq '0.5.0') 'Installed metadata must record the package mod version.'
 Require ((Get-Content -LiteralPath $config -Raw).Contains('OtherMod=')) 'Other autoload was lost.'
 $oldStatePath = Join-Path $game 'mods/ftn_coop/install-state.json'
 $oldState = Get-Content -LiteralPath $oldStatePath -Raw | ConvertFrom-Json
 $oldState.PSObject.Properties.Remove('mod_version')
 [IO.File]::WriteAllText($oldStatePath,($oldState | ConvertTo-Json -Depth 5),[Text.UTF8Encoding]::new($false))
 & $install -GameDir $game | Out-Null
-Require ((Get-Content -LiteralPath $oldStatePath -Raw | ConvertFrom-Json).mod_version -eq '0.4.1') 'Updating an old manifest must add version metadata.'
+Require ((Get-Content -LiteralPath $oldStatePath -Raw | ConvertFrom-Json).mod_version -eq '0.5.0') 'Updating an old manifest must add version metadata.'
 Require (([regex]::Matches((Get-Content -LiteralPath $config -Raw), '(?m)^FtnCoop=')).Count -eq 1) 'Duplicate autoload entry.'
 & $uninstall -GameDir $game | Out-Null
 Require ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($config)) -eq $originalBytes) 'Original config bytes were not restored.'

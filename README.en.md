@@ -1,4 +1,4 @@
-# FTN-Coop · 0.4.1
+# FTN-Coop · 0.5.0
 
 English · [Deutsch](README.de.md)
 
@@ -47,7 +47,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.4.1-Setup.exe**:
+The easiest option is **FTN-Coop-0.5.0-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -77,7 +77,7 @@ settings and other mod files into account.
 
 ## Linux installation (Ubuntu / Mint)
 
-New in **0.4.0**: download **FTN-Coop-0.4.1-Linux.run** from Releases.
+New in **0.4.0**: download **FTN-Coop-0.5.0-Linux.run** from Releases.
 This single file includes the installer and all mod files. It needs **Python 3.8
 or later**, with **python3-tk** for the optional graphical window; no pip packages
 are required. Close the demo before installing, updating or removing the mod.
@@ -87,7 +87,7 @@ are required. Close the demo before installing, updating or removing the mod.
 2. In a terminal, change to the folder containing the downloaded file and run:
 
    ```sh
-   python3 FTN-Coop-0.4.1-Linux.run
+   python3 FTN-Coop-0.5.0-Linux.run
    ```
 
 3. Check the detected demo folder, or select it using **Browse**. Click **Install**
@@ -98,7 +98,7 @@ are required. Close the demo before installing, updating or removing the mod.
 If the graphical window is unavailable, use the terminal interface:
 
 ```sh
-python3 FTN-Coop-0.4.1-Linux.run --cli
+python3 FTN-Coop-0.5.0-Linux.run --cli
 ```
 
 For a specific folder, use `--install --game-dir "/path/to/Find The Needle Demo"`;
@@ -115,7 +115,7 @@ binaries, saves and unrelated mods are kept. The installer downloads nothing.
 **Verification limit:** filesystem, package and GUI tests were run on the Windows
 development computer. Execution on Ubuntu/Mint, the graphical desktop integration,
 Proton gameplay and Windows/Linux multiplayer still require a real Linux test.
-All participants must use **0.4.1** and demo build **25963876**. Internet play
+All participants must use **0.5.0** and demo build **25963876**. Internet play
 between separate Steam accounts remains unverified.
 
 ## Play with friends
@@ -211,7 +211,7 @@ available. It does not download or install anything. Checks are limited to once
 per minute; an offline/rate-limit error leaves play available. No player name,
 Steam ID, lobby identifier, local path, report or save data is included.
 
-Version 0.4.1 is published as a normal GitHub release. Internet play between
+Version 0.5.0 is published as a normal GitHub release. Internet play between
 separate Steam accounts remains unverified.
 
 ## Save and leave
@@ -252,7 +252,7 @@ a verified version.
 - Native guest building/research/pause menus are integrated; other special
   functions and decorative effects still need testing with friends.
 - Mixed Windows/Linux joining has been reported, together with Linux host crashes.
-  The Proton crash cause is still unconfirmed; 0.4.1 does not establish a crash fix.
+  The Proton crash cause is still unconfirmed; 0.5.0 does not establish a crash fix.
 - If guest movement is blocked immediately after joining, switching away with
   Alt+Tab and back has helped in a reported session. An automatic focus fix is unverified.
 - The demo disables its leaderboards when mods are loaded.

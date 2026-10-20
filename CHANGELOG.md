@@ -1,5 +1,25 @@
 # Changelog / Änderungen
 
+## 0.5.0 · 2026-10-20
+
+### English
+
+- Guest controls and shared tools update: native B building catalog, Tab / T research and Escape pause menu; host-confirmed purchases and building actions.
+- Guest Shift sprint uses native stamina. Native drop, pick up, right-click throw, action bindings and hotbar selection are supported.
+- Purchased standard tools unlock for everyone independently; dropping, picking up and ending the session preserve shared unlocks. Physical containers keep separate ownership and improved carried-object visuals.
+- Quest title/progress follow the host. Status updates avoid rebuilding unrelated collection UI; position-only prop updates reuse existing objects.
+- Windows Setup, ZIP and Linux installer use version 0.5.0. All participants must update and restart the demo. English documentation and release notes precede German.
+- Functional verification covers 30 mod test groups, targeted two-instance controls and four-instance shared-world/save checks on Windows. Linux/Proton host crashes and the initial guest-focus issue remain unconfirmed; no Linux crash fix is claimed.
+
+### Deutsch
+
+- Update für Gaststeuerung und gemeinsame Werkzeuge: originaler Baukatalog mit B, Forschung mit Tab / T und Pausemenü mit Escape; Käufe und Bauaktionen bestätigt der Host.
+- Gastsprint mit Umschalt verwendet die normale Ausdauer. Ablegen, Aufnehmen, Rechtsklick-Werfen, Aktionsbelegung und Schnellleiste werden unterstützt.
+- Gekaufte Standardwerkzeuge sind für alle unabhängig freigeschaltet; Ablegen, Aufnehmen und Sitzungsende erhalten diese Freischaltungen. Physische Behälter behalten getrennte Besitzer und eine verbesserte Tragedarstellung.
+- Aufgabentitel und Fortschritt folgen dem Host. Statusupdates bauen die Sammlung nicht unnötig neu auf; reine Positionsupdates verwenden vorhandene Objekte weiter.
+- Windows-Setup, ZIP und Linux-Installer verwenden 0.5.0. Alle Teilnehmer müssen aktualisieren und die Demo neu starten. Englische Anleitungen und Release-Hinweise stehen vor Deutsch.
+- Die Funktionsprüfung umfasst 30 Mod-Testgruppen, gezielte Steuerungstests mit zwei sowie Welt-/Speichertests mit vier Spielinstanzen unter Windows. Linux-/Proton-Host-Abstürze und das anfängliche Gast-Fokusproblem bleiben ungeklärt; eine Linux-Absturzbehebung wird nicht bestätigt.
+
 ## 0.4.1 · 2026-10-20
 
 ### English

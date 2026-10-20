@@ -9,7 +9,7 @@ import unittest
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACT = ROOT / "dist/FTN-Coop-0.4.1-Linux.run"
+ARTIFACT = ROOT / "dist/FTN-Coop-0.5.0-Linux.run"
 
 
 class LinuxPackageTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class LinuxPackageTests(unittest.TestCase):
     def test_executable_version_and_bilingual_install_update_remove(self):
         version = self.run_setup("--version")
         self.assertEqual(0, version.returncode, version.stderr)
-        self.assertIn("0.4.1", version.stdout)
+        self.assertIn("0.5.0", version.stdout)
         installed = self.run_setup("--install", "--language", "en", "--game-dir", str(self.game))
         self.assertEqual(0, installed.returncode, installed.stderr)
         self.assertIn("installed", installed.stdout)
