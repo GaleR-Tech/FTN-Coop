@@ -3,6 +3,8 @@ extends RefCounted
 class BuildStepper extends Node:
 	var steps := 0
 	var placed := 0
+	var _state := 0
+	var _anchor := Vector3.ZERO
 	func _frame(_delta: float) -> void: pass
 	func status() -> Dictionary: return {"ok":true}
 	func primary() -> void:
@@ -82,10 +84,24 @@ func run(_tree: SceneTree) -> Array[String]:
 	adapter.nodes = {"world":world,"player":player}
 	if adapter.select_local_tool(1).code!="HOST_ONLY": errors.append("Offline selection must remain with the native game.")
 	adapter.guest_mode = true
+	if not adapter.has_method("apply_local_build_state"):
+		errors.append("A guest's native multi-step preview must receive the host-confirmed build anchor.")
 	if not adapter.select_local_tool(1).ok or player.current_tool!=1: errors.append("A guest can select an unlocked native tool.")
 	if adapter.select_local_tool(2).ok or player.current_tool!=1: errors.append("A guest cannot force a locked native tool.")
 	if not adapter.select_local_build("cabinet").ok or adapter.select_local_build("foreign").ok: errors.append("Guest build selection uses only the native catalogue.")
 	if adapter.select_local_build("scanner").code!="BUILD_LOCKED": errors.append("A refused native build unlock must be reported.")
+	if adapter.has_method("apply_local_build_state"):
+		var before_count: int = player.build.placed
+		var preview := {"id":"cabinet","state":1,"anchor":Vector3(2,0,3)}
+		if not adapter.apply_local_build_state(preview).ok or player.build._state!=1 or player.build._anchor!=Vector3(2,0,3) or player.build.placed!=before_count:
+			errors.append("A confirmed anchor must update only the guest preview, without spending or placing locally.")
+		preview.anchor = Vector3(INF,0,0)
+		if adapter.apply_local_build_state(preview).ok or player.build._anchor!=Vector3(2,0,3): errors.append("Invalid preview updates must leave the previous anchor intact.")
+		player.build_id = "other"
+		preview.anchor = Vector3.ZERO
+		adapter.apply_local_build_state(preview)
+		if player.build._anchor!=Vector3(2,0,3): errors.append("A delayed anchor for an old selection must not change a new local selection.")
+		player.build_id = "cabinet"
 	var options: Dictionary = adapter.guest_options()
 	if options.shop.size()!=1 or not options.shop[0].label.contains("Eimer") or options.buildings.size()!=2 or options.upgrades[0].label!="Schneller scannen": errors.append("Guest choices need readable native titles and bounded catalogue IDs.")
 	if panel.factory_calls!=0: errors.append("Reading catalogue titles must not create native menu rows.")

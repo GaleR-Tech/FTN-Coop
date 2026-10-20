@@ -44,6 +44,8 @@ var _status_due := 3.0
 var _sent_stage := ""
 var _status_announced_at: Dictionary = {}
 var _last_equipment_sequence := 0
+var _last_build_sequence := 0
+var _equipment_epochs: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -70,7 +72,7 @@ func configure(transport: Node, adapter: RefCounted, build: String, version: Str
 	world_sync.confirmed.connect(_on_confirmed)
 	world_sync.resync_required.connect(_request_resync)
 	_receiver.completed.connect(_on_snapshot_completed)
-	_receiver.failed.connect(func(_code: String): _request_resync())
+	_receiver.failed.connect(func(code: String): _request_resync(code))
 	_receiver.progress_changed.connect(_on_transfer_progress)
 	transport.message_received.connect(_on_message)
 	transport.disconnected.connect(_on_disconnected)
@@ -119,6 +121,8 @@ func leave() -> void:
 	_resync_attempts = 0
 	_sequence = 0
 	_last_equipment_sequence = 0
+	_last_build_sequence = 0
+	_equipment_epochs.clear()
 	_sync_wait = 0.0
 	_receiver.cancel()
 	load_progress.emit("idle",0,0)
@@ -134,7 +138,7 @@ func request_action(kind: String, payload: Dictionary) -> Dictionary:
 	if _adapter.has_method("read_local_pose"):
 		var pose: Dictionary = _adapter.read_local_pose()
 		if not pose.ok: return pose
-		body.pose = pose.value
+		body.pose = _local_equipment_pose(pose.value)
 	var queued: Dictionary = _queue(1,"ACTION",body)
 	return {"ok":true,"code":"OK","value":{"sequence":_sequence}} if queued.ok else queued
 
@@ -202,7 +206,7 @@ func _process(delta: float) -> void:
 			var pose: Dictionary = _adapter.read_local_pose()
 			if pose.ok:
 				if session.is_host: _broadcast_pose(1,pose.value)
-				else: _queue(1,"POSE",{"pose":pose.value},false)
+				else: _queue(1,"POSE",{"pose":_local_equipment_pose(pose.value)},false)
 	for peer in _pending.keys():
 		_pending[peer].age += delta
 		if _pending[peer].age>120.0: _fail("TRANSFER_TIMEOUT",peer)
@@ -251,6 +255,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 			"WORLD_READY": _finish_world(peer,body)
 			"WORLD_REQUEST":
 				if not _preparing.has(peer):
+					print("[FTN-Coop] Guest requested a replacement world snapshot")
 					_world_retries[peer] = int(_world_retries.get(peer,0))+1
 					if _world_retries[peer]>3:
 						_fail("RESYNC_FAILED",peer)
@@ -269,7 +274,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 					_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":false,"code":"PEER_NOT_READY"})
 					return
 				if body.has("pose") and _adapter.has_method("update_actor_pose"):
-					var updated: Dictionary = _adapter.update_actor_pose(peer,body.pose) if body.pose is Dictionary else _error("POSE_INVALID")
+					var updated: Dictionary = _update_actor_pose(peer,body.pose) if body.pose is Dictionary else _error("POSE_INVALID")
 					if not updated.ok:
 						_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":false,"code":updated.code})
 						return
@@ -278,11 +283,14 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				var result := {"sequence":body.sequence,"ok":applied.ok,"code":applied.code}
 				if applied.ok and body.kind in ["purchase","item_interact"] and _adapter.has_method("read_actor_equipment"):
 					result.equipment = _adapter.read_actor_equipment(peer)
+					_equipment_epochs[peer] = maxi(int(_equipment_epochs.get(peer,0)),body.sequence)
+				if applied.ok and body.kind=="place" and _adapter.has_method("read_actor_build_state"):
+					result.build = _adapter.read_actor_build_state(peer)
 				_queue(peer,"ACTION_RESULT",result)
 			"POSE":
 				if session.roster[peer].state!="playing" or not body.get("pose") is Dictionary: return
 				if _adapter.has_method("update_actor_pose"):
-					if not _adapter.update_actor_pose(peer,body.pose).ok: return
+					if not _update_actor_pose(peer,body.pose).ok: return
 				if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
 				pose_received.emit(peer,body.pose)
 				_broadcast_pose(peer,body.pose)
@@ -315,7 +323,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 		"SNAPSHOT_BEGIN", "SNAPSHOT_CHUNK":
 			if message.type=="SNAPSHOT_BEGIN": _resync_pending = false
 			var received: Dictionary = _receiver.receive(1,body)
-			if not received.ok and received.code not in ["STALE_REVISION","TRANSFER_MISMATCH"]: _request_resync()
+			if not received.ok and received.code not in ["STALE_REVISION","TRANSFER_MISMATCH"]: _request_resync(received.code)
 		"EVENT":
 			var applied: Dictionary = world_sync.accept_event(1,body)
 			if applied.ok: _sync_wait = 0.0
@@ -329,10 +337,27 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 		"ACTION_RESULT":
 			if typeof(body.get("sequence"))!=TYPE_INT or body.sequence<=0 or not body.get("ok") is bool or not body.get("code") is String: return
 			if body.ok and body.sequence>_last_equipment_sequence and body.get("equipment") is Dictionary and _adapter.has_method("apply_local_equipment"):
-				_last_equipment_sequence = body.sequence
-				_adapter.apply_local_equipment(body.equipment)
+				if _adapter.apply_local_equipment(body.equipment).ok: _last_equipment_sequence = body.sequence
+			if body.ok and body.sequence>_last_build_sequence and body.get("build") is Dictionary and _adapter.has_method("apply_local_build_state"):
+				_last_build_sequence = body.sequence
+				_adapter.apply_local_build_state(body.build)
 			if typeof(body.get("sequence"))==TYPE_INT and body.get("ok") is bool and body.get("code") is String: action_result.emit(body.sequence,body.ok,body.code)
 			if body.get("ok")==false and body.get("code") is String: problem.emit(body.code)
+
+func _local_equipment_pose(pose: Dictionary) -> Dictionary:
+	var tagged := pose.duplicate()
+	tagged.equipment_epoch = _last_equipment_sequence
+	return tagged
+
+func _update_actor_pose(peer: int, pose: Dictionary) -> Dictionary:
+	var epoch: Variant = pose.get("equipment_epoch",0)
+	if typeof(epoch)!=TYPE_INT or epoch<0 or epoch>9007199254740991: return _error("POSE_INVALID")
+	var confirmed := pose.duplicate()
+	confirmed.erase("equipment_epoch")
+	# Movement uses a separate unreliable channel. A late packet must not undo
+	# a host-confirmed purchase/drop while its result is reaching the guest.
+	if epoch<int(_equipment_epochs.get(peer,0)): confirmed.erase("tool")
+	return _adapter.update_actor_pose(peer,confirmed)
 
 func _start_world(peer: int) -> void:
 	var epoch := _epoch
@@ -390,6 +415,7 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	_baseline_received = true
 	_loading = true
 	load_progress.emit("loading",0,0)
+	print("[FTN-Coop] Loading a guest world snapshot")
 	var epoch := _epoch
 	var restored: Dictionary = await save_session.open_guest(state.native,session.session_id)
 	if epoch!=_epoch: return
@@ -401,7 +427,7 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	if _adapter.has_method("set_local_peer"): _adapter.set_local_peer(_transport.local_peer_id())
 	var applied: Dictionary = _adapter.apply_confirmed_event({"patch":state.frame})
 	if not applied.ok:
-		_request_resync()
+		_request_resync(applied.code)
 		return
 	if state.get("spawn") is Transform3D and _adapter.has_method("set_local_spawn"): _adapter.set_local_spawn(state.spawn)
 	world_sync.accept_baseline(revision)
@@ -446,8 +472,10 @@ func _queue_event(peer: int, event: Dictionary) -> void:
 			_fail(queued_packet.code,peer)
 			break
 
-func _request_resync() -> void:
+func _request_resync(reason: String="") -> void:
 	if _leaving or session.is_host or _resync_pending or connection_id.is_empty(): return
+	if reason.is_empty(): reason = world_sync.last_resync_reason
+	print("[FTN-Coop] World resynchronization requested: "+(reason if not reason.is_empty() else "UNKNOWN"))
 	_resync_attempts += 1
 	if _resync_attempts>3:
 		_fail("RESYNC_FAILED")
@@ -492,6 +520,7 @@ func _on_disconnected(peer: int) -> void:
 		_pending.erase(peer)
 	_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
 	world_sync.remove_peer(peer)
+	_equipment_epochs.erase(peer)
 	_adapter.remove_actor(peer)
 	if session.is_host: _publish_collaboration()
 

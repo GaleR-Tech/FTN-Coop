@@ -2,6 +2,7 @@ extends RefCounted
 
 const SHARED := ["field","warehouse","shop","leaderboards","map","bay_door","floor_hatch","board","sell_all_dialog","catalog","rake_panel","pelletizer_panel","launcher_panel","lamp_panel","switch_box_panel","tag_show","splitter_panel","t_panel","lift_panel","silo_panel","paint_panel","arm_panel","arm_links","drone_panel","drone_zone","wire_mode","machine_panel","pole_panel","tech_panel","inspector","needle_drawer","demo_end_dialog","needle_panel","load_panel","pause_menu","bug_report"]
 const TOOLS := ["hand","shovel","pitchfork","broom","detector","yard_vac","lighter","build","carry","aim"]
+const WORLD_REFERENCES := ["field","live","props","builds","world_root","hud"]
 
 func create(source: Node, world: Node, peer_id: int) -> Dictionary:
 	if source == null or world == null or source.get_script() == null or source.get_script().resource_path != "res://scripts/player/player.gd" or peer_id <= 1:
@@ -29,10 +30,37 @@ func bind_tools(actor: Node, source: Node) -> Dictionary:
 			elif source.is_ancestor_of(reference):
 				var replacement: Node = actor.get_node_or_null(source.get_path_to(reference))
 				if replacement != null: target.set(property.name,replacement)
-			elif not str(property.name).begins_with("_"):
-				# Only public world dependencies are shared. Private runtime
-				# references such as carry._held belong to the original player.
+			elif property.name in WORLD_REFERENCES:
+				# Native tool bodies may live under the world rather than the
+				# player. Their basins and effects must never be shared.
 				target.set(property.name,reference)
+	var world: Node = source.get_parent()
+	var setups := []
+	for role in TOOLS:
+		var tool: Variant = actor.get(role)
+		if not tool is Node or not tool.has_method("setup"): continue
+		for method in tool.get_script().get_script_method_list():
+			if method.name!="setup": continue
+			var args := []
+			for argument in method.args:
+				var name: String = str(argument.name).trim_prefix("p_")
+				if name=="world": args.append(world)
+				elif name=="player": args.append(actor)
+				elif name in ["camera","head"]: args.append(actor.get(name))
+				elif name in ["field","live","props","builds"]: args.append(source.get(role).get(name))
+				else: return {"ok":false,"code":"ACTOR_NOT_READY","value":null}
+			setups.append({"tool":tool,"args":args})
+	var previous: Array[Node] = world.get_children() if world!=null else []
+	for setup in setups: setup.tool.callv("setup",setup.args)
+	if world!=null:
+		var generated: Array[WeakRef] = []
+		for child in world.get_children():
+			if child not in previous and child!=actor: generated.append(weakref(child))
+		actor.tree_exiting.connect(func():
+			for reference in generated:
+				var owned: Variant = reference.get_ref()
+				if is_instance_valid(owned): owned.queue_free()
+		)
 	if actor.get("camera") is Camera3D: actor.get("camera").current = false
 	if source.get("camera") is Camera3D: source.get("camera").current = true
 	# The player controller stays disabled: it must never read host input.

@@ -6,6 +6,7 @@ signal resync_required
 const ACTIONS := ["dig","place","demolish","purchase","upgrade","needle_collect","item_interact","machine_config"]
 var revision := 0
 var is_host := false
+var last_resync_reason := ""
 var _adapter: RefCounted
 var _ready_peers: Dictionary = {}
 var _last: Dictionary = {}
@@ -15,6 +16,7 @@ func configure(adapter: RefCounted, host: bool) -> void:
 	_adapter = adapter
 	is_host = host
 	revision = 0
+	last_resync_reason = ""
 	_ready_peers.clear()
 	_last.clear()
 
@@ -66,6 +68,7 @@ func _confirm(event: Dictionary) -> Dictionary:
 func accept_baseline(value: int) -> Dictionary:
 	if is_host or value < 0: return _error("INVALID_PAYLOAD")
 	revision = value
+	last_resync_reason = ""
 	return _ok()
 
 func accept_event(sender: int, event: Dictionary) -> Dictionary:
@@ -73,11 +76,14 @@ func accept_event(sender: int, event: Dictionary) -> Dictionary:
 	if typeof(event.get("revision")) != TYPE_INT: return _error("INVALID_PAYLOAD")
 	if event.revision <= revision: return _error("STALE_REVISION")
 	if event.revision != revision + 1:
+		last_resync_reason = "REVISION_GAP"
 		resync_required.emit()
 		return _error("RESYNC_REQUIRED")
 	var result: Dictionary = _adapter.apply_confirmed_event(event)
 	if result.ok: revision = event.revision
-	else: resync_required.emit()
+	else:
+		last_resync_reason = str(result.code)
+		resync_required.emit()
 	return result
 
 func _error(code: String) -> Dictionary:

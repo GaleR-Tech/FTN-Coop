@@ -8,7 +8,7 @@ signal message_received(peer_id: int, channel: int, bytes: PackedByteArray)
 signal invite_received(lobby_id: int)
 
 var build := "25963876"
-var mod_version := "0.5.0"
+var mod_version := "0.5.1"
 var lobby_id := 0
 var _steam: Object
 var _peer: MultiplayerPeer

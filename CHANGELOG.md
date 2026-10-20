@@ -1,5 +1,23 @@
 # Changelog / Änderungen
 
+## 0.5.1 · 2026-10-20
+
+### English
+
+- Fixed remote tools sharing the host's shovel/pitchfork collision bodies, hay basins and effects. Native tool setup now creates independent per-player parts; removing a player cleans up those generated parts.
+- Fixed guest conveyor construction previews: the host returns the confirmed build stage and starting point, so the guest sees the multi-step run without creating buildings or spending money locally.
+- Prevented delayed movement packets from re-equipping a tool after a confirmed drop. New deliberate selections remain available after confirmation; leaving clears the equipment ordering state.
+- Added local log messages showing when a guest world is loaded or replaced and the reason for automatic world recovery. No player names, account IDs or saves are included in these messages.
+- The reported intermittent native loading screen is not confirmed fixed. Linux/Proton host crashes remain unconfirmed. All players must install 0.5.1 and restart the demo.
+
+### Deutsch
+
+- Gemeinsame Schaufel-/Mistgabel-Kollisionskörper, Heu-Auffangbereiche und Effekte zwischen Host und Gast korrigiert. Die normale Werkzeuginitialisierung erzeugt nun eigene Teile pro Spieler; beim Verlassen werden diese aufgeräumt.
+- Förderband-Bauvorschau für Gäste korrigiert: Der Host meldet den bestätigten Bauschritt und Startpunkt zurück. Gäste sehen den mehrstufigen Verlauf, ohne lokal Gebäude zu erzeugen oder Geld auszugeben.
+- Verspätete Bewegungsnachrichten können abgelegte Werkzeuge nicht mehr automatisch ausrüsten. Bewusste neue Auswahlen nach Bestätigung bleiben möglich; beim Verlassen wird die Reihenfolgeverwaltung zurückgesetzt.
+- Lokale Protokollmeldungen zeigen das Laden/Ersetzen einer Gastwelt und den Grund eines automatischen Welt-Neuabgleichs. Diese Meldungen enthalten keine Spielernamen, Konto-IDs oder Spielstände.
+- Der gemeldete gelegentliche normale Ladebildschirm ist noch nicht als behoben bestätigt. Linux-/Proton-Host-Abstürze bleiben ungeklärt. Alle Spieler müssen 0.5.1 installieren und die Demo neu starten.
+
 ## 0.5.0 · 2026-10-20
 
 ### English

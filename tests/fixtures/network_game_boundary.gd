@@ -11,7 +11,13 @@ var actor_poses: Dictionary = {}
 var last_action_pose: Dictionary = {}
 var nodes: Dictionary = {}
 var equipped_tool := 0
-func read_actor_equipment(_peer: int) -> Dictionary: return {"tool":1}
+var actor_tools: Dictionary = {}
+var preview_stage := 0
+func read_actor_build_state(_peer: int) -> Dictionary: return {"id":"belt","state":1,"anchor":Vector3(1,0,2)}
+func apply_local_build_state(value: Dictionary) -> Dictionary:
+	preview_stage = value.get("state",0)
+	return _ok()
+func read_actor_equipment(peer: int) -> Dictionary: return {"tool":actor_tools.get(peer,1)}
 func apply_local_equipment(value: Dictionary) -> Dictionary:
 	equipped_tool = value.get("tool",0)
 	return _ok()
@@ -21,10 +27,16 @@ func probe(_root: Node) -> Dictionary: return _ok()
 func read_local_pose() -> Dictionary: return _ok(pose)
 func update_actor_pose(peer: int, value: Dictionary) -> Dictionary:
 	actor_poses[peer] = value.duplicate(true)
+	if value.has("tool"): actor_tools[peer] = value.tool
 	return _ok()
 func apply_host_action(peer: int, kind: String, payload: Dictionary) -> Dictionary:
 	last_action_pose = actor_poses.get(peer,{}).duplicate(true)
-	return super.apply_host_action(peer,kind,payload)
+	if kind=="item_interact" and payload.get("operation")=="drop":
+		actor_tools[peer] = 0
+		return _ok({"kind":kind,"world":world.duplicate(true)})
+	var result: Dictionary = super.apply_host_action(peer,kind,payload)
+	if result.ok and kind=="purchase": actor_tools[peer] = 1
+	return result
 func prepare_actor(_peer: int) -> Dictionary: return _ok()
 func remove_actor(_peer: int) -> void: pass
 func capture_world() -> Dictionary: return _ok(world.duplicate(true))

@@ -169,6 +169,25 @@ func select_hotbar_slot(index: int) -> void:
 func read_actor_equipment(peer: int) -> Dictionary:
 	return {"tool":int(actors[peer].get("current_tool"))} if actors.has(peer) and is_instance_valid(actors[peer]) else {}
 
+func read_actor_build_state(peer: int) -> Dictionary:
+	if not actors.has(peer) or not is_instance_valid(actors[peer]) or actors[peer].get("current_tool")!=8: return {}
+	var actor: Node = actors[peer]
+	var tool: Node = actor.get("build")
+	return {"id":actor.get("build_id"),"state":tool.get("_state"),"anchor":tool.get("_anchor")}
+
+func apply_local_build_state(value: Dictionary) -> Dictionary:
+	if value.size()!=3 or not value.get("id") is String or value.id.length()>100 or not _safe_native_data(value,0): return _error("ACTION_INVALID")
+	if typeof(value.get("state"))!=TYPE_INT or value.state<0 or value.state>16 or not value.get("anchor") is Vector3 or value.anchor.length()>2048.0: return _error("ACTION_INVALID")
+	if not guest_mode or not nodes.has("player"): return _error("WORLD_NOT_READY")
+	var player: Node = nodes.player
+	if player.get("current_tool")!=8 or player.get("build_id")!=value.id: return _ok()
+	var tool: Node = player.get("build")
+	tool.set("_state",value.state)
+	tool.set("_anchor",value.anchor)
+	# Only restore the confirmed construction stage. Calling primary() here
+	# would spend money and create an unauthorized local building.
+	return _ok()
+
 func apply_local_equipment(value: Dictionary) -> Dictionary:
 	if value.size()!=1 or typeof(value.get("tool"))!=TYPE_INT or value.tool<0 or value.tool>8: return _error("ACTION_INVALID")
 	if not guest_mode or not nodes.has("player"): return _error("WORLD_NOT_READY")

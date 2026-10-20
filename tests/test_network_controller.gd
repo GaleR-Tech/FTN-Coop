@@ -88,6 +88,24 @@ func run(tree: SceneTree) -> Array[String]:
 		for frame in range(10): await tree.process_frame
 		if host_game.world.money != 0 or guest_game.world != host_game.world: errors.append("Wire retries must not duplicate purchases.")
 		if guest_game.equipped_tool!=0: errors.append("A retried purchase result must not override a player's later equipment selection.")
+		guest.request_action("place",{"id":"belt"})
+		for frame in range(15): await tree.process_frame
+		if guest_game.preview_stage!=1: errors.append("A host-confirmed placement step must return its preview anchor to the guest.")
+		guest.pose_stream_enabled = false
+		guest.request_action("item_interact",{"operation":"drop"})
+		for frame in range(15): await tree.process_frame
+		if guest_game.equipped_tool!=0 or host_game.read_actor_equipment(2).tool!=0: errors.append("A tool drop must unequip the corresponding player on both sides.")
+		guest_wire.drop_lossy = false
+		var late_pose := {"position":Vector3(3,4,5),"rotation":Vector3.ZERO,"tool":1,"equipment_epoch":0}
+		packet = codec.encode({"protocol":1,"type":"POSE","session":host.session.session_id,"body":{"pose":late_pose,"_connection":guest.connection_id}})
+		guest_wire.send(1,1,packet.value,false)
+		for frame in range(5): await tree.process_frame
+		if host_game.read_actor_equipment(2).tool!=0: errors.append("A movement packet sent before the drop confirmation must not put the dropped tool back in that player's hand.")
+		late_pose.equipment_epoch = guest._last_equipment_sequence
+		packet = codec.encode({"protocol":1,"type":"POSE","session":host.session.session_id,"body":{"pose":late_pose,"_connection":guest.connection_id}})
+		guest_wire.send(1,1,packet.value,false)
+		for frame in range(5): await tree.process_frame
+		if host_game.read_actor_equipment(2).tool!=1: errors.append("A deliberate tool selection after the drop confirmation must remain available.")
 	guest.leave()
 	if not stages.is_empty() and stages[-1]!="idle": errors.append("Leaving must reset displayed transfer progress.")
 	host.leave()

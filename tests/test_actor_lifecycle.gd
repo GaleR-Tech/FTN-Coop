@@ -4,15 +4,32 @@ class Tool extends Node:
 	var player: Node
 	var props: Node
 	var _held: Node3D
+	var body: Node3D
+	var basin: Area3D
+	var world_root: Node
+	var field: Node
+	var live: Node
+	func setup(p_world: Node, p_field: Node, p_live: Node, p_props: Node) -> void:
+		world_root = p_world
+		field = p_field
+		live = p_live
+		props = p_props
+		body = Node3D.new()
+		basin = Area3D.new()
+		body.add_child(basin)
+		p_world.add_child(body)
 
 class Controller extends Node3D:
 	var hand := Tool.new()
 	var carry := Tool.new()
+	var shovel := Tool.new()
 	func _init() -> void:
 		add_child(hand)
 		add_child(carry)
+		add_child(shovel)
 		hand.player = self
 		carry.player = self
+		shovel.player = self
 
 func run(tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []
@@ -54,6 +71,11 @@ func run(tree: SceneTree) -> Array[String]:
 	var props := Node.new()
 	var held := Node3D.new()
 	props.add_child(held)
+	var tool_world := Node3D.new()
+	tool_world.add_child(source)
+	tool_world.add_child(remote)
+	tree.root.add_child(tool_world)
+	source.shovel.setup(tool_world,null,null,props)
 	source.carry.props = props
 	source.carry._held = held
 	var factory: RefCounted = load("res://mods/ftn_coop/native_actor.gd").new()
@@ -61,8 +83,12 @@ func run(tree: SceneTree) -> Array[String]:
 		errors.append("A remote controller needs its own player references and the shared prop manager.")
 	if remote.carry._held!=null or source.carry._held!=held:
 		errors.append("Preparing a guest must never copy ownership of a tool already held by the host.")
-	source.free()
+	if remote.shovel.body==source.shovel.body or remote.shovel.basin==source.shovel.basin or remote.shovel.body==null:
+		errors.append("Every player's shovel needs its own native body and hay basin, including world-parented tool nodes.")
 	remote.free()
+	await tree.process_frame
+	if tool_world.get_child_count()!=2: errors.append("Removing a remote controller must also remove its generated world-parented tool body.")
+	tool_world.free()
 	props.free()
 	return errors
 

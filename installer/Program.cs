@@ -17,14 +17,14 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("FTN-Coop Setup")]
 [assembly: AssemblyProduct("FTN-Coop")]
-[assembly: AssemblyVersion("0.5.0.0")]
-[assembly: AssemblyFileVersion("0.5.0.0")]
+[assembly: AssemblyVersion("0.5.1.0")]
+[assembly: AssemblyFileVersion("0.5.1.0")]
 
 internal enum SetupLanguage { German, English }
 
 internal static class Program
 {
-    internal const string CurrentVersion = "0.5.0";
+    internal const string CurrentVersion = "0.5.1";
     internal const string ProjectUrl = "https://github.com/GaleR-Tech/FTN-Coop";
     internal const string SupportUrl = "https://buymeacoffee.com/galertech";
 

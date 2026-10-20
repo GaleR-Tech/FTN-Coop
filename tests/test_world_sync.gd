@@ -43,6 +43,9 @@ func run(_tree: SceneTree) -> Array[String]:
 		if client.accept_event(1,events[-1]).code != "STALE_REVISION": errors.append("Duplicate host events must not apply twice.")
 		if client.accept_event(2,{"revision":6}).code != "HOST_ONLY": errors.append("Guests must not confirm events.")
 		if client.accept_event(1,{"revision":7}).code != "RESYNC_REQUIRED": errors.append("Missing revisions must require a fresh baseline.")
+		if client.get("last_resync_reason")!="REVISION_GAP": errors.append("World recovery must retain the actual reason for an unexpected reload.")
+		client.accept_baseline(7)
+		if client.get("last_resync_reason")!="": errors.append("An accepted baseline must clear the old recovery reason.")
 		client.free()
 	host.free()
 	return errors
