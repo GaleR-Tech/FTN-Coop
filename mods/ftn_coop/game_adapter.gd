@@ -30,6 +30,12 @@ var _closing_guest := false
 var _guest_save_block := false
 var _guest_world_block := false
 var _settings_scope: RefCounted
+var _quest_world_id := 0
+var _quest_index := -1
+var _guest_quest: Dictionary = {}
+var _shared_tools_scope: RefCounted
+var _props_replica: RefCounted
+var _local_peer := 0
 
 func probe(root: Node) -> Dictionary:
 	if root == null or not is_instance_valid(root):
@@ -152,7 +158,48 @@ func select_local_tool(index: int) -> Dictionary:
 	if not nodes.has("player") or index<0 or index>8: return _error("ACTION_INVALID")
 	if not bool(nodes.player.call("is_tool_unlocked",index)): return _error("TOOL_LOCKED")
 	nodes.player.call("_set_tool",index,true)
+	if nodes.player.has_method("_sync_hands"): nodes.player.call("_sync_hands")
 	return _ok()
+
+func select_hotbar_slot(index: int) -> void:
+	if guest_mode and nodes.has("player") and index>=0 and index<10:
+		nodes.player.call("select_hotbar_slot",index)
+		if nodes.player.has_method("_sync_hands"): nodes.player.call("_sync_hands")
+
+func read_actor_equipment(peer: int) -> Dictionary:
+	return {"tool":int(actors[peer].get("current_tool"))} if actors.has(peer) and is_instance_valid(actors[peer]) else {}
+
+func apply_local_equipment(value: Dictionary) -> Dictionary:
+	if value.size()!=1 or typeof(value.get("tool"))!=TYPE_INT or value.tool<0 or value.tool>8: return _error("ACTION_INVALID")
+	if not guest_mode or not nodes.has("player"): return _error("WORLD_NOT_READY")
+	if nodes.player.get("current_tool")==value.tool: return _ok()
+	return select_local_tool(value.tool)
+
+func start_shared_tools() -> void:
+	stop_shared_tools()
+	if not nodes.has("state") or not nodes.has("player") or not nodes.player.has_method("tool_unlock"): return
+	var ids := []
+	for index in range(8): ids.append(nodes.player.call("tool_unlock",index))
+	_shared_tools_scope = load(MODULE_DIR+"/shared_tools.gd").new()
+	_shared_tools_scope.configure(nodes.state,ids)
+
+func stop_shared_tools() -> void:
+	if _shared_tools_scope!=null: _shared_tools_scope.close()
+	_shared_tools_scope = null
+
+func try_shared_tool_pickup(actor: Node) -> bool:
+	if _shared_tools_scope==null or not nodes.has("props") or actor==null: return false
+	var carry: Node = actor.get("carry")
+	if carry==null or not carry.has_method("_probe"): return false
+	var item: Variant = carry.call("_probe",false)
+	if not item is Node3D or not nodes.props.get("items").has(item): return false
+	var id: Variant = item.get("tool_id")
+	if not id is String or not _shared_tools_scope.contains(id): return false
+	actor.call("equip_tool_id",id)
+	var index := int(actor.get("current_tool"))
+	if actor.call("tool_unlock",index)!=id: return false
+	nodes.props.call("remove",item)
+	return true
 
 func select_local_build(id: String) -> Dictionary:
 	if not guest_mode: return _error("HOST_ONLY")
@@ -161,6 +208,18 @@ func select_local_build(id: String) -> Dictionary:
 	if catalogue==null or not catalogue.get("_tiles") is Dictionary or not catalogue.get("_tiles").has(id): return _error("ACTION_INVALID")
 	nodes.player.call("equip_build",id)
 	return _ok() if nodes.player.get("build_id")==id else _error("BUILD_LOCKED")
+
+func selected_build_id() -> String:
+	if not guest_mode or not nodes.has("player"): return ""
+	var id: Variant = nodes.player.get("build_id")
+	return id if id is String else ""
+
+func set_local_peer(peer: int) -> void:
+	_local_peer = peer
+
+func _prop_module() -> RefCounted:
+	if _props_replica==null: _props_replica = load(MODULE_DIR+"/prop_replica.gd").new()
+	return _props_replica
 
 func pump_local_preview(delta: float) -> void:
 	if not guest_mode or not nodes.has("player") or nodes.player.get("current_tool")!=8: return
@@ -344,6 +403,7 @@ func update_actor_pose(peer_id: int, pose: Dictionary) -> Dictionary:
 	if pose.has("tool"):
 		if actors[peer_id].get("current_tool")!=pose.tool:
 			actors[peer_id].call("_set_tool",pose.tool,true)
+	if actors[peer_id].has_method("_sync_hands"): actors[peer_id].call("_sync_hands")
 	return _ok()
 
 func apply_host_action(actor_id: int, kind: String, payload: Dictionary) -> Dictionary:
@@ -412,7 +472,8 @@ func _perform_action(actor: Node, kind: String, payload: Dictionary) -> Dictiona
 			if not bool(nodes.tech.call("buy",id)): return _error("PURCHASE_REFUSED")
 		"item_interact":
 			match payload.get("operation"):
-				"pick": actor.get("carry").call("try_pick",false)
+				"pick":
+					if not try_shared_tool_pickup(actor): actor.get("carry").call("try_pick",false)
 				"drop":
 					actor.call("drop_active_tool")
 					actor.get("hand").call("drop_held")
@@ -439,11 +500,29 @@ func _live_frame() -> Dictionary:
 			return {}
 	last_sync_error = ""
 	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":nodes.builds.call("to_array").duplicate(true),"props":nodes.props.call("to_array").duplicate(true),"belts":nodes.world.call("_belts_to_dict").duplicate(true)}
+	if guest_mode:
+		frame.held_props = _prop_module().held.duplicate(true)
+		if _prop_module().initialized:
+			var view: Array = _prop_module().authoritative_view(nodes.props)
+			if view.size()!=frame.props.size():
+				last_sync_error = "WORLD_NOT_READY"
+				return {}
+			frame.props = view
+	else:
+		var players := actors.duplicate()
+		if nodes.has("player"): players[1] = nodes.player
+		frame.held_props = _prop_module().capture_held(nodes.props,players)
 	var settings := read_shared_settings()
 	if not settings.ok:
 		last_sync_error = settings.code
 		return {}
 	frame.settings = settings.value
+	var missions: Node = nodes.world.get("missions")
+	if guest_mode:
+		if not _guest_quest.is_empty(): frame.quest = _guest_quest.duplicate(true)
+	elif missions!=null and missions.has_method("progress_of"):
+		var id: String = frame.state.get("mission_id","")
+		frame.quest = {"index":int(frame.state.get("mission_index",0)),"progress":missions.call("progress_of",id) if not id.is_empty() else {}}
 	if nodes.has("live"):
 		if guest_mode:
 			frame.loose = _loose_module().current.duplicate(true)
@@ -518,6 +597,11 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 		_hide_native_loose(false)
 	nodes.saves.set("block_save",_guest_save_block)
 	if _loose != null: _loose.close()
+	_guest_quest.clear()
+	_props_replica = null
+	_local_peer = 0
+	_quest_world_id = 0
+	_quest_index = -1
 	guest_mode = false
 	return _ok()
 
@@ -697,11 +781,10 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		var settings := apply_shared_settings(patch.settings)
 		if not settings.ok: return settings
 	if patch.has("state"):
-		nodes.state.call("from_dict",patch.state)
-		# The native save loader clamps these values for an offline load. A live
-		# replica must retain the authoritative values, including locked fuel.
-		for field in ["jetpack_fuel","money_peak"]:
-			if patch.state.has(field): nodes.state.set(field,patch.state[field])
+		_apply_guest_state(patch.state)
+	if patch.has("quest"):
+		_guest_quest = patch.quest.duplicate(true)
+		_refresh_guest_quests(nodes.state.call("to_dict"))
 	if patch.has("tech"): nodes.tech.call("from_dict",patch.tech,false)
 	var moved := PackedInt32Array()
 	if patch.has("heights"):
@@ -723,8 +806,8 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		nodes.builds.call("from_array",patch.buildings)
 		nodes.builds.set("restore_slice_usec",slice)
 	if patch.has("props"):
-		nodes.props.call("clear")
-		nodes.props.call("from_array",patch.props)
+		_prop_module().apply_records(nodes.props,patch.props)
+	if patch.has("held_props"): _prop_module().held = patch.held_props.duplicate(true)
 	if patch.has("belts"):
 		nodes.saves.set("_pending_belts",patch.belts.duplicate(true))
 		nodes.world.call("_restore_belts")
@@ -733,6 +816,56 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		var loose_result: Dictionary = _loose_module().apply(patch.loose,nodes.world.get_tree().root)
 		if not loose_result.ok: return loose_result
 	return _ok()
+
+func _apply_guest_state(authoritative: Dictionary) -> void:
+	var state: Node = nodes.state
+	var before: Dictionary = state.call("to_dict").duplicate(true)
+	var blocked := state.is_blocking_signals()
+	# The offline loader broadcasts a full collection/UI reset. Doing that on
+	# every clock or money update stalls the frame and rebuilds unrelated UI.
+	state.set_block_signals(true)
+	state.call("from_dict",authoritative)
+	for field in ["jetpack_fuel","money_peak"]:
+		if authoritative.has(field): state.set(field,authoritative[field])
+	state.set_block_signals(blocked)
+	if not blocked:
+		var updates := [
+			["money_changed",["money"],[authoritative.get("money",0.0)]],
+			["debt_changed",["debt"],[authoritative.get("debt",0.0)]],
+			["hay_changed",["hay_total","hay_dug","hay_returned"],[authoritative.get("hay_total",0.0),authoritative.get("hay_dug",0.0)]],
+			["hay_sold_changed",["hay_sold"],[authoritative.get("hay_sold",0.0)]],
+			["best_combo_changed",["best_combo"],[authoritative.get("best_combo",0)]],
+			["collection_loaded",["needle_positions","needle_taken","needle_type","discovered","needle_stock","needles_by_type","needle_out","needle_loose","needle_loose_at","needles_found"],[]],
+			["hotbar_changed",["hotbar","recent_builds","fresh_builds","fresh_since"],[]],
+			["tools_changed",["owned_tools"],[]],
+			["gifts_changed",["gifts","gifts_given","gift_card_due","missions_paid"],[]],
+			["contract_pin_changed",["contract_pinned"],[authoritative.get("contract_pinned",false)]],
+			["contracts_changed",["contract_index","contract_delivered","contracts_done"],[]],
+		]
+		for update in updates:
+			if not state.has_signal(update[0]): continue
+			for key in update[1]:
+				if before.get(key)!=authoritative.get(key):
+					state.callv("emit_signal",[update[0]]+update[2])
+					break
+	_refresh_guest_quests(authoritative)
+
+func _refresh_guest_quests(authoritative: Dictionary) -> void:
+	if not nodes.has("world") or not authoritative.has("mission_index"): return
+	var world: Node = nodes.world
+	var panels := [world.get("quests"),world.get("mission_cue")]
+	var index: int = authoritative.mission_index
+	if world.get_instance_id()!=_quest_world_id or index!=_quest_index:
+		_quest_world_id = world.get_instance_id()
+		_quest_index = index
+		for panel in panels:
+			if panel is Node and panel.has_method("show_step"): panel.call("show_step",index)
+	var director: Node = world.get("missions")
+	var id: String = authoritative.get("mission_id","")
+	if director==null or not director.has_method("progress_of") or id.is_empty(): return
+	var progress: Dictionary = _guest_quest.progress if _guest_quest.get("index")==index else director.call("progress_of",id)
+	for panel in panels:
+		if panel is Node and panel.has_method("show_progress"): panel.call("show_progress",progress)
 
 func _hide_native_loose(hidden: bool) -> void:
 	if not nodes.has("live"): return
@@ -744,16 +877,37 @@ func _hide_native_loose(hidden: bool) -> void:
 
 func pump_guest_visuals() -> void:
 	if not guest_mode or not nodes.has("field"): return
+	if nodes.has("player"):
+		if nodes.player.has_method("_sync_hands"): nodes.player.call("_sync_hands")
+		var camera: Variant = nodes.player.get("camera")
+		if nodes.has("props") and camera is Camera3D and _props_replica!=null:
+			_props_replica.follow_local(nodes.props,_local_peer,camera.global_transform)
 	# Finish only native rendering jobs, never guest physics/production steps.
 	for method in ["_land_jobs","_finish_chunks","_land_cells","_flush_dirty"]:
 		if nodes.field.has_method(method): nodes.field.call(method)
 
 func _patch_valid(patch: Dictionary) -> bool:
-	if not _safe_native_data(patch,0): return false
+	# Cross-field checks below must never depend on wire dictionary order.
+	if patch.has("state") and not patch.state is Dictionary: return false
+	if patch.has("props") and not patch.props is Array: return false
+	# Quest text is display-only, so separators such as "3 / 5" are safe.
+	# It never enters a native resource or save loader.
+	var native := patch.duplicate()
+	native.erase("quest")
+	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","tech","heights","field","buildings","props","belts","loose","settings"]: return false
-		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","belts":"world","loose":"world","settings":"cfg"}[key]
+		if key not in ["state","tech","heights","field","buildings","props","held_props","belts","loose","settings","quest"]: return false
+		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","settings":"cfg","quest":"world"}[key]
 		if not nodes.has(role): return false
+		if key=="quest":
+			var quest: Variant = patch[key]
+			if not quest is Dictionary or quest.size()!=2 or typeof(quest.get("index"))!=TYPE_INT or quest.index<0 or quest.index>100000 or not quest.get("progress") is Dictionary: return false
+			var progress: Dictionary = quest.progress
+			if not progress.is_empty():
+				if progress.size()!=3 or not progress.get("text") is String or progress.text.length()>256: return false
+				for name in ["have","need"]:
+					if typeof(progress.get(name)) not in [TYPE_FLOAT,TYPE_INT] or not is_finite(float(progress[name])) or absf(float(progress[name]))>1.0e15: return false
+			if patch.has("state") and quest.index!=patch.state.get("mission_index"): return false
 		if key=="settings" and not _settings().validate(patch[key]).ok: return false
 		if key in ["state","tech"]:
 			if not patch[key] is Dictionary: return false
@@ -779,6 +933,10 @@ func _patch_valid(patch: Dictionary) -> bool:
 			if not patch[key] is Array or patch[key].size() > 32768: return false
 			for record in patch[key]:
 				if not record is Dictionary: return false
+				if key=="props" and (not record.get("id") is String or not record.get("state") is Dictionary or not record.get("xform") is Transform3D): return false
+		if key=="held_props":
+			var records: Array = patch.props if patch.has("props") else nodes.props.call("to_array")
+			if not _prop_module().validate_held(patch[key],records.size()): return false
 		if key == "belts" and (not patch.belts is Dictionary or not nodes.has("saves")): return false
 		if key == "loose" and (not patch.loose is Dictionary or not _loose_module().validate(patch.loose)): return false
 	# Local calls and tests receive the same object-free data restrictions as wire data.

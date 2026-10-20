@@ -29,7 +29,10 @@ func bind_tools(actor: Node, source: Node) -> Dictionary:
 			elif source.is_ancestor_of(reference):
 				var replacement: Node = actor.get_node_or_null(source.get_path_to(reference))
 				if replacement != null: target.set(property.name,replacement)
-			else: target.set(property.name,reference)
+			elif not str(property.name).begins_with("_"):
+				# Only public world dependencies are shared. Private runtime
+				# references such as carry._held belong to the original player.
+				target.set(property.name,reference)
 	if actor.get("camera") is Camera3D: actor.get("camera").current = false
 	if source.get("camera") is Camera3D: source.get("camera").current = true
 	# The player controller stays disabled: it must never read host input.

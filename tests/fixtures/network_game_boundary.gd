@@ -10,6 +10,11 @@ var pose := {"position":Vector3.ZERO,"rotation":Vector3.ZERO}
 var actor_poses: Dictionary = {}
 var last_action_pose: Dictionary = {}
 var nodes: Dictionary = {}
+var equipped_tool := 0
+func read_actor_equipment(_peer: int) -> Dictionary: return {"tool":1}
+func apply_local_equipment(value: Dictionary) -> Dictionary:
+	equipped_tool = value.get("tool",0)
+	return _ok()
 var guest_mode: bool:
 	get: return guest
 func probe(_root: Node) -> Dictionary: return _ok()

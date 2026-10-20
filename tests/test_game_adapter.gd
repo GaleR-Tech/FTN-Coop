@@ -84,6 +84,7 @@ func run(_tree: SceneTree) -> Array[String]:
 		if not fresh.apply_confirmed_event({"patch":{"state":host_state}}).ok or normalizing.to_dict()!=host_state:
 			errors.append("A guest must preserve host fuel and peak money even when the native save loader normalizes them.")
 		normalizing.free()
+	live_state_checks(errors)
 	var snapshot := {"version":1,"state":{},"heights":PackedFloat32Array([0.0,0.0,0.0,0.0]),"player":Transform3D.IDENTITY,"buildings":[],"props":[],"belts":{},"tech":{},"cell":2.0,"extent":1.0}
 	if not fresh._snapshot_valid(snapshot): errors.append("A correctly sized native grid must remain valid.")
 	unsafe_snapshot_grid_checks(fresh,snapshot,errors)
@@ -94,6 +95,51 @@ func run(_tree: SceneTree) -> Array[String]:
 	unsafe_snapshot.cell = 0.0
 	if fresh._snapshot_valid(unsafe_snapshot): errors.append("Invalid native world dimensions must fail before native world allocation.")
 	return errors
+
+func live_state_checks(errors: Array[String]) -> void:
+	var replica: Script = load("res://tests/fixtures/replica_boundary.gd")
+	var state: Node = replica.LiveState.new()
+	var world: Node = replica.QuestWorld.new()
+	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
+	adapter.nodes = {"state":state,"world":world}
+	adapter.guest_mode = true
+	var collection := VBoxContainer.new()
+	var original := Label.new()
+	collection.add_child(original)
+	state.collection_loaded.connect(func():
+		for child in collection.get_children(): child.free()
+		collection.add_child(Label.new())
+	)
+	var wallet := Label.new()
+	state.money_changed.connect(func(amount: float): wallet.text = str(amount))
+	var changed: Dictionary = state.to_dict().duplicate(true)
+	changed.money = 25.0
+	if not adapter.apply_confirmed_event({"patch":{"state":changed}}).ok or wallet.text!="25.0":
+		errors.append("A live money update must refresh the native wallet.")
+	if not is_instance_valid(original) or collection.get_child(0)!=original:
+		errors.append("A money-only update must preserve the collection UI instead of rebuilding it.")
+	changed.mission_index = 14
+	changed.mission_id = "fill_bucket"
+	if not adapter.apply_confirmed_event({"patch":{"state":changed}}).ok or world.quests.title.text!="Fill bucket" or world.mission_cue.shown!=14 or world.quests.progress.text!="50% full":
+		errors.append("A host quest advance must refresh both native guest quest displays and their progress.")
+	if not adapter.apply_confirmed_event({"patch":{"quest":{"index":14,"progress":{"have":3.0,"need":5.0,"text":"3 / 5"}}}}).ok or world.quests.progress.text!="3 / 5" or world.mission_cue.progress.text!="3 / 5":
+		errors.append("Quest progress must come from the host, including a progress-only update.")
+	var invalid := {"state":changed.duplicate(true),"quest":{"index":14,"progress":{"have":3.0,"need":5.0,"text":["bad"]}}}
+	invalid.state.money = 99.0
+	if adapter.apply_confirmed_event({"patch":invalid}).ok or state.data.money!=25.0:
+		errors.append("Invalid quest data must reject the entire update before money changes.")
+	adapter.nodes.props = state
+	for malformed in [{"quest":{"index":14,"progress":{}},"state":1},{"state":1,"quest":{"index":14,"progress":{}}},{"held_props":[],"props":1},{"props":1,"held_props":[]}]:
+		if adapter.apply_confirmed_event({"patch":malformed}).code!="SNAPSHOT_INVALID":
+			errors.append("Malformed siblings must be rejected independently of field order.")
+	adapter.nodes.erase("props")
+	changed.needle_stock = [1]
+	adapter.apply_confirmed_event({"patch":{"state":changed}})
+	if is_instance_valid(original): errors.append("A changed collection must still refresh its native UI.")
+	wallet.free()
+	collection.free()
+	world.free()
+	state.free()
 
 func unsafe_snapshot_grid_checks(adapter: RefCounted, snapshot: Dictionary, errors: Array[String]) -> void:
 	for heights in [PackedFloat32Array([0]),PackedFloat32Array([0,0,0,9000])]:

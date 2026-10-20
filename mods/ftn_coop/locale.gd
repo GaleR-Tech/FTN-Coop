@@ -132,7 +132,7 @@ const EN := {
 	"Mitspieler":"Player", "Verbinden …":"Connecting …",
 	"Gastwelt wird geschlossen …":"Closing guest world …",
 	"Warte, bis das Hauptmenü wieder bereit ist.":"Wait until the main menu is ready again.",
-	"Gaststeuerung: WASD · Maus · Leertaste\n1–8 Werkzeug · E aufnehmen · G ablegen\nR werfen · Entf abbauen · Linksklick benutzen":"Guest controls: WASD · Mouse · Space\n1–8 tool · E pick up · G put down\nR throw · Delete dismantle · Left click use",
+	"Gaststeuerung: WASD · Maus · Leertaste · Umschalt sprinten\n1–0 Schnellleiste · E aufnehmen · Q ablegen\nF / Rechtsklick werfen · X abbauen · Linksklick benutzen\nB bauen · Tab / T Forschung · Escape Menü":"Guest controls: WASD · Mouse · Space · Shift sprint\n1–0 hotbar · E pick up · Q put down\nF / Right click throw · X dismantle · Left click use\nB build · Tab / T research · Escape menu",
 	"Werkzeug":"Tool", "Auswählen":"Select", "Am Laden kaufen":"Buy at the shop", "Kaufen":"Buy",
 	"Gebäude":"Buildings", "Bauen":"Build", "Forschung":"Research", "Verbessern":"Upgrade",
 	"Nadel im angeschauten Schrank ablegen":"Deposit needle in the cabinet you are looking at",

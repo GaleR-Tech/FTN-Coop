@@ -43,6 +43,7 @@ var _peer_stages: Dictionary = {}
 var _status_due := 3.0
 var _sent_stage := ""
 var _status_announced_at: Dictionary = {}
+var _last_equipment_sequence := 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -96,6 +97,7 @@ func leave() -> void:
 	for record in _pending.values(): record.transfer.queue_free()
 	_pending.clear()
 	for peer in _connections: _adapter.remove_actor(peer)
+	if _adapter!=null and _adapter.has_method("stop_shared_tools"): _adapter.stop_shared_tools()
 	_connections.clear()
 	_peer_epochs.clear()
 	_world_retries.clear()
@@ -116,6 +118,7 @@ func leave() -> void:
 	_resync_pending = false
 	_resync_attempts = 0
 	_sequence = 0
+	_last_equipment_sequence = 0
 	_sync_wait = 0.0
 	_receiver.cancel()
 	load_progress.emit("idle",0,0)
@@ -143,6 +146,7 @@ func _on_state_changed() -> void:
 			load_progress.emit("waiting",0,0)
 		elif session.state==session.State.PLAYING: load_progress.emit("ready",0,0)
 	if session.is_host and session.state==session.State.LOBBY:
+		if _adapter.has_method("start_shared_tools"): _adapter.start_shared_tools()
 		world_sync.configure(_adapter,true)
 		world_sync.set_ready(1,true)
 		session.mark_world_ready(1)
@@ -271,7 +275,10 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 						return
 					if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
 				var applied: Dictionary = world_sync.submit_action(peer,body.sequence,body.kind,body.payload)
-				_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":applied.ok,"code":applied.code})
+				var result := {"sequence":body.sequence,"ok":applied.ok,"code":applied.code}
+				if applied.ok and body.kind in ["purchase","item_interact"] and _adapter.has_method("read_actor_equipment"):
+					result.equipment = _adapter.read_actor_equipment(peer)
+				_queue(peer,"ACTION_RESULT",result)
 			"POSE":
 				if session.roster[peer].state!="playing" or not body.get("pose") is Dictionary: return
 				if _adapter.has_method("update_actor_pose"):
@@ -320,6 +327,10 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 		"POSE":
 			if typeof(body.get("peer"))==TYPE_INT and body.get("pose") is Dictionary and session.roster.has(body.peer): pose_received.emit(body.peer,body.pose)
 		"ACTION_RESULT":
+			if typeof(body.get("sequence"))!=TYPE_INT or body.sequence<=0 or not body.get("ok") is bool or not body.get("code") is String: return
+			if body.ok and body.sequence>_last_equipment_sequence and body.get("equipment") is Dictionary and _adapter.has_method("apply_local_equipment"):
+				_last_equipment_sequence = body.sequence
+				_adapter.apply_local_equipment(body.equipment)
 			if typeof(body.get("sequence"))==TYPE_INT and body.get("ok") is bool and body.get("code") is String: action_result.emit(body.sequence,body.ok,body.code)
 			if body.get("ok")==false and body.get("code") is String: problem.emit(body.code)
 
@@ -387,6 +398,7 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	if not restored.ok:
 		_fail(restored.code)
 		return
+	if _adapter.has_method("set_local_peer"): _adapter.set_local_peer(_transport.local_peer_id())
 	var applied: Dictionary = _adapter.apply_confirmed_event({"patch":state.frame})
 	if not applied.ok:
 		_request_resync()

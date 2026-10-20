@@ -1,5 +1,19 @@
 extends RefCounted
 
+class Tool extends Node:
+	var player: Node
+	var props: Node
+	var _held: Node3D
+
+class Controller extends Node3D:
+	var hand := Tool.new()
+	var carry := Tool.new()
+	func _init() -> void:
+		add_child(hand)
+		add_child(carry)
+		hand.player = self
+		carry.player = self
+
 func run(tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []
 	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
@@ -35,6 +49,21 @@ func run(tree: SceneTree) -> Array[String]:
 	if actor.carried_load!=0: errors.append("Disconnect must release the active native tool before removing its controller from the tree.")
 	await tree.process_frame
 	world.free()
+	var source := Controller.new()
+	var remote := Controller.new()
+	var props := Node.new()
+	var held := Node3D.new()
+	props.add_child(held)
+	source.carry.props = props
+	source.carry._held = held
+	var factory: RefCounted = load("res://mods/ftn_coop/native_actor.gd").new()
+	if not factory.bind_tools(remote,source).ok or remote.carry.player!=remote or remote.carry.props!=props:
+		errors.append("A remote controller needs its own player references and the shared prop manager.")
+	if remote.carry._held!=null or source.carry._held!=held:
+		errors.append("Preparing a guest must never copy ownership of a tool already held by the host.")
+	source.free()
+	remote.free()
+	props.free()
 	return errors
 
 func _prepare(adapter: RefCounted, results: Array) -> void:

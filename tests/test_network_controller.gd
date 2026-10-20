@@ -1,5 +1,19 @@
 extends RefCounted
 
+class Inventory extends Node:
+	signal tools_changed
+	var owned_tools := {"spade":true}
+	func drop() -> void:
+		owned_tools.erase("spade")
+		tools_changed.emit()
+
+class TeardownBoundary extends "res://tests/fixtures/network_game_boundary.gd":
+	var inventory := Inventory.new()
+	var scope: RefCounted = load("res://mods/ftn_coop/shared_tools.gd").new()
+	func start_shared_tools() -> void: scope.configure(inventory,["spade"])
+	func stop_shared_tools() -> void: scope.close()
+	func remove_actor(_peer: int) -> void: inventory.drop()
+
 func run(tree: SceneTree) -> Array[String]:
 	if not FileAccess.file_exists("res://mods/ftn_coop/network_controller.gd"):
 		return ["End-to-end session/world message routing is not implemented yet."]
@@ -64,19 +78,42 @@ func run(tree: SceneTree) -> Array[String]:
 		for frame in range(30): await tree.process_frame
 		if host_game.world.money != 0 or guest_game.world != host_game.world:
 			errors.append("A guest action must change the host once and return the confirmed state.")
+		if guest_game.equipped_tool!=1: errors.append("A successful purchase must return the buyer's selected equipment to that guest.")
 		if host_game.last_action_pose != guest_game.pose:
 			errors.append("Reliable world actions must carry their exact look/position even when lossy movement packets disappear.")
 		var codec: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
+		guest_game.equipped_tool = 0
 		var packet: Dictionary = codec.encode({"protocol":1,"type":"ACTION","session":host.session.session_id,"body":{"sequence":1,"kind":"purchase","payload":{},"_connection":guest.connection_id}})
 		guest_wire.send(1,0,packet.value,true)
 		for frame in range(10): await tree.process_frame
 		if host_game.world.money != 0 or guest_game.world != host_game.world: errors.append("Wire retries must not duplicate purchases.")
+		if guest_game.equipped_tool!=0: errors.append("A retried purchase result must not override a player's later equipment selection.")
 	guest.leave()
 	if not stages.is_empty() and stages[-1]!="idle": errors.append("Leaving must reset displayed transfer progress.")
 	host.leave()
 	for node in [host,guest,host_wire,guest_wire]: node.queue_free()
 	await tree.process_frame
 	errors.append_array(await _four_socket_peers(tree))
+	errors.append_array(await _shared_unlock_teardown(tree))
+	return errors
+
+func _shared_unlock_teardown(tree: SceneTree) -> Array[String]:
+	var game := TeardownBoundary.new()
+	game.tree = tree
+	var wire: Node = load("res://tests/fixtures/pipe_transport.gd").new()
+	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
+	for node in [wire,controller]: tree.root.add_child(node)
+	controller.configure(wire,game,"25963876","0.4.0")
+	controller.host()
+	await tree.process_frame
+	controller._connections[2] = "guest"
+	controller.leave()
+	var errors: Array[String] = []
+	if not game.inventory.owned_tools.has("spade"):
+		errors.append("Ending hosting must preserve shared unlocks while remote actors drop their selected tools.")
+	game.inventory.free()
+	for node in [controller,wire]: node.queue_free()
+	await tree.process_frame
 	return errors
 
 func _four_socket_peers(tree: SceneTree) -> Array[String]:

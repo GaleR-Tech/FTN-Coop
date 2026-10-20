@@ -30,3 +30,38 @@ class Records extends Node:
 	func clear() -> void: data.clear()
 	func to_array() -> Array: return data
 	func from_array(value: Array) -> void: data = value.duplicate(true)
+
+class LiveState extends Node:
+	signal collection_loaded
+	signal money_changed(amount: float)
+	var data := {"money":10.0,"mission_index":0,"mission_id":"first_hay","needle_stock":[0]}
+	func to_dict() -> Dictionary: return data
+	func from_dict(value: Dictionary) -> void:
+		data = value.duplicate(true)
+		collection_loaded.emit()
+		money_changed.emit(data.money)
+
+class QuestPanel extends Control:
+	var shown := -1
+	var title := Label.new()
+	var progress := Label.new()
+	func _init() -> void:
+		add_child(title)
+		add_child(progress)
+	func show_step(index: int) -> void:
+		shown = index
+		title.text = "Fill bucket" if index==14 else "Pick up hay"
+	func show_progress(value: Dictionary) -> void: progress.text = value.get("text","")
+
+class Missions extends Node:
+	func progress_of(id: String) -> Dictionary:
+		return {"have":0.5,"need":1.0,"text":"50% full"} if id=="fill_bucket" else {}
+
+class QuestWorld extends Node:
+	var quests := QuestPanel.new()
+	var mission_cue := QuestPanel.new()
+	var missions := Missions.new()
+	func _init() -> void:
+		add_child(quests)
+		add_child(mission_cue)
+		add_child(missions)

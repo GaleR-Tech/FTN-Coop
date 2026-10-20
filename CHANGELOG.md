@@ -1,5 +1,27 @@
 # Changelog / Änderungen
 
+## 0.4.1 · 2026-10-20
+
+### English
+
+- Added native guest building (B), research (Tab / T) and pause (Escape) menus. Menu input suspends that guest's movement; purchases and building actions remain host-authoritative. Guest save/load actions are disabled.
+- Fixed guest sprinting with native speeds and stamina, right-click throwing, native drop/throw keys, personal action remapping and hotbar selection.
+- Purchased standard tools now unlock for everyone independently. Drop/pickup and session teardown preserve shared unlocks; purchase results equip the buyer without changing the host's hands.
+- Stopped copying held physical objects into new guest actors. Guest carried-object visuals follow the local camera; position-only prop updates reuse existing objects.
+- Synchronize quest title and host progress. Money-only updates no longer rebuild unrelated collection UI. A local status-update probe fell from about 52 ms to 0.9 ms; this is not a full Internet performance measurement.
+- Hardened malformed update rejection and repeated equipment results. Windows Setup, ZIP and Linux installer all require 0.4.1; everyone must update and restart.
+- Linux/Proton host crashes and the reported initial guest-focus issue remain unconfirmed. The reported Alt+Tab workaround may restore movement. No Linux crash fix is claimed.
+
+### Deutsch
+
+- Originalen Baukatalog (B), Forschungsbaum (Tab / T) und Pausemenü (Escape) für Gäste eingebunden. Im Menü ruht die eigene Bewegung; Käufe und Bauaktionen bestätigt der Host. Gastaktionen zum Speichern/Laden sind gesperrt.
+- Gastsprint mit normalen Geschwindigkeiten und Ausdauer, Rechtsklick-Werfen, normale Ablegen-/Werfen-Tasten, persönliche Aktionsbelegung und Schnellleiste korrigiert.
+- Gekaufte Standardwerkzeuge sind für alle unabhängig freigeschaltet. Ablegen/Aufnehmen und das Sitzungsende erhalten diese Freischaltungen; die Kaufbestätigung rüstet den Käufer aus und lässt die Host-Hand unabhängig.
+- Getragene physische Objekte werden nicht mehr in neue Gastfiguren kopiert. Die Gastdarstellung getragener Objekte folgt der eigenen Kamera; reine Positionsupdates verwenden vorhandene Objekte weiter.
+- Aufgabentitel und Host-Fortschritt werden abgeglichen. Reine Geldänderungen bauen die Sammlungsoberfläche nicht mehr neu auf. Eine lokale Statusaktualisierung sank im Messlauf von etwa 52 ms auf 0,9 ms; das ist keine vollständige Internet-Performancemessung.
+- Ungültige Updates und wiederholte Ausrüstungsbestätigungen abgesichert. Windows-Setup, ZIP und Linux-Installer verwenden 0.4.1; alle müssen aktualisieren und neu starten.
+- Linux-/Proton-Host-Abstürze und das gemeldete anfängliche Gast-Fokusproblem bleiben ungeklärt. Alt+Tab und Zurückwechseln half in der gemeldeten Sitzung beim Bewegen. Eine Linux-Absturzbehebung wird nicht bestätigt.
+
 ## 0.4.0 · 2026-10-20
 
 ### English

@@ -5,6 +5,7 @@ var ui: CanvasLayer
 var presence: Node3D
 var movement: Node
 var input_bridge: Node
+var guest_menus: Node
 var _adapter: RefCounted
 var _transport: Node
 var _build := ""
@@ -60,6 +61,10 @@ func configure(adapter: RefCounted, transport: Node, build: String, version: Str
 	input_bridge = load(base+"/input_bridge.gd").new()
 	input_bridge.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(input_bridge)
+	guest_menus = load(base+"/guest_menus.gd").new()
+	add_child(guest_menus)
+	guest_menus.action_requested.connect(_request)
+	guest_menus.leave_requested.connect(_leave)
 	ui.host_requested.connect(start_host)
 	ui.invite_requested.connect(_invite)
 	ui.leave_requested.connect(_leave)
@@ -270,6 +275,7 @@ func _state_changed() -> void:
 	_refresh_marker_display()
 
 func _stopped() -> void:
+	guest_menus.detach()
 	_marker_requested = false
 	_marker_cooldown = 0.0
 	_world_markers.clear()
@@ -288,6 +294,8 @@ func _stopped() -> void:
 
 func _on_panel_toggled(open: bool) -> void:
 	if open:
+		guest_menus.close_panels()
+		guest_menus.active = false
 		_mouse_before_panel = Input.mouse_mode
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		input_bridge.enabled = false
@@ -303,15 +311,18 @@ func _process(delta: float) -> void:
 	if network==null: return
 	_marker_cooldown = maxf(0.0,_marker_cooldown-delta)
 	var guest := _is_guest()
-	input_bridge.enabled = guest and ui.actions_allowed()
-	movement.enabled = input_bridge.enabled
 	if guest:
 		var body: CharacterBody3D = _adapter.local_player_body()
 		if body!=null and body.get_instance_id()!=_guest_player_id:
 			var bound: Dictionary = movement.configure(_adapter)
 			if not bound.ok: ui.show_error(bound.code)
-			else: _guest_player_id = body.get_instance_id()
-		if input_bridge.enabled: _adapter.pump_local_preview(delta)
+			else:
+				_guest_player_id = body.get_instance_id()
+				if _adapter.nodes.has("world"): guest_menus.bind_world(_adapter.nodes.world)
+	guest_menus.active = guest and ui.actions_allowed()
+	input_bridge.enabled = guest_menus.active and not guest_menus.blocks_gameplay()
+	movement.enabled = input_bridge.enabled
+	if guest and input_bridge.enabled: _adapter.pump_local_preview(delta)
 	_hud_due += delta
 	if _hud_due>=0.2:
 		_hud_due = 0.0
@@ -328,11 +339,12 @@ func _on_primary(kind: String, payload: Dictionary) -> void:
 	if kind=="dig" and payload.get("pressed")==false:
 		_request(kind,payload)
 		return
-	if not ui.actions_allowed(): return
-	if kind=="dig" and not _selected_build.is_empty():
+	if not ui.actions_allowed() or guest_menus.blocks_gameplay(): return
+	if kind=="dig":
 		var pose: Dictionary = _adapter.read_local_pose()
 		if pose.ok and pose.value.get("tool")==8:
-			if payload.get("pressed")==true: _request("place",{"id":_selected_build})
+			var selected: String = _adapter.selected_build_id() if _adapter.has_method("selected_build_id") else _selected_build
+			if payload.get("pressed")==true and not selected.is_empty(): _request("place",{"id":selected})
 			return
 	_request(kind,payload)
 
@@ -349,9 +361,24 @@ func _unhandled_input(event: InputEvent) -> void:
 			_marker_requested = true
 			get_viewport().set_input_as_handled()
 		return
-	if not _is_guest() or not ui.actions_allowed(): return
+	if not _is_guest() or not ui.actions_allowed() or guest_menus.blocks_gameplay(): return
+	if event is InputEventKey and event.pressed and not event.echo and _adapter.has_method("select_hotbar_slot"):
+		for index in range(10):
+			var action := "hotbar_"+str(index+1)
+			if InputMap.has_action(action) and event.is_action_pressed(action):
+				_adapter.select_hotbar_slot(index)
+				get_viewport().set_input_as_handled()
+				return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode>=KEY_1 and event.physical_keycode<=KEY_8:
 		_select_tool(event.physical_keycode-KEY_1)
+		get_viewport().set_input_as_handled()
+
+func _input(event: InputEvent) -> void:
+	if network==null or not network.session.is_host or network.session.state!=network.session.State.PLAYING or not ui.actions_allowed(): return
+	if not event is InputEventKey or not event.pressed or event.echo or not InputMap.has_action("interact") or not event.is_action_pressed("interact"): return
+	if Input.mouse_mode!=Input.MOUSE_MODE_CAPTURED or get_tree().paused: return
+	if _adapter.has_method("try_shared_tool_pickup") and _adapter.try_shared_tool_pickup(_adapter.local_player_body()):
+		network.world_sync.poll()
 		get_viewport().set_input_as_handled()
 
 func _marker_input_allowed() -> bool:
@@ -395,7 +422,7 @@ func _populate_actions() -> void:
 		box.remove_child(child)
 		child.queue_free()
 	var options: Dictionary = _adapter.guest_options()
-	ui._label(box,"Gaststeuerung: WASD · Maus · Leertaste\n1–8 Werkzeug · E aufnehmen · G ablegen\nR werfen · Entf abbauen · Linksklick benutzen").add_theme_font_size_override("font_size",13)
+	ui._label(box,"Gaststeuerung: WASD · Maus · Leertaste · Umschalt sprinten\n1–0 Schnellleiste · E aufnehmen · Q ablegen\nF / Rechtsklick werfen · X abbauen · Linksklick benutzen\nB bauen · Tab / T Forschung · Escape Menü").add_theme_font_size_override("font_size",13)
 	_option_row(box,"Werkzeug",options.get("tools",[]),"Auswählen",func(id: Variant):
 		_select_tool(int(id))
 		ui.set_panel_open(false)

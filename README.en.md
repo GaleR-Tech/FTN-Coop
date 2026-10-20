@@ -1,4 +1,4 @@
-# FTN-Coop · 0.4.0
+# FTN-Coop · 0.4.1
 
 English · [Deutsch](README.de.md)
 
@@ -47,7 +47,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.4.0-Setup.exe**:
+The easiest option is **FTN-Coop-0.4.1-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -77,7 +77,7 @@ settings and other mod files into account.
 
 ## Linux installation (Ubuntu / Mint)
 
-New in **0.4.0**: download **FTN-Coop-0.4.0-Linux.run** from Releases.
+New in **0.4.0**: download **FTN-Coop-0.4.1-Linux.run** from Releases.
 This single file includes the installer and all mod files. It needs **Python 3.8
 or later**, with **python3-tk** for the optional graphical window; no pip packages
 are required. Close the demo before installing, updating or removing the mod.
@@ -87,7 +87,7 @@ are required. Close the demo before installing, updating or removing the mod.
 2. In a terminal, change to the folder containing the downloaded file and run:
 
    ```sh
-   python3 FTN-Coop-0.4.0-Linux.run
+   python3 FTN-Coop-0.4.1-Linux.run
    ```
 
 3. Check the detected demo folder, or select it using **Browse**. Click **Install**
@@ -98,7 +98,7 @@ are required. Close the demo before installing, updating or removing the mod.
 If the graphical window is unavailable, use the terminal interface:
 
 ```sh
-python3 FTN-Coop-0.4.0-Linux.run --cli
+python3 FTN-Coop-0.4.1-Linux.run --cli
 ```
 
 For a specific folder, use `--install --game-dir "/path/to/Find The Needle Demo"`;
@@ -115,7 +115,7 @@ binaries, saves and unrelated mods are kept. The installer downloads nothing.
 **Verification limit:** filesystem, package and GUI tests were run on the Windows
 development computer. Execution on Ubuntu/Mint, the graphical desktop integration,
 Proton gameplay and Windows/Linux multiplayer still require a real Linux test.
-All participants must use **0.4.0** and demo build **25963876**. Internet play
+All participants must use **0.4.1** and demo build **25963876**. Internet play
 between separate Steam accounts remains unverified.
 
 ## Play with friends
@@ -143,11 +143,19 @@ excluded. The report is not sent automatically; you can review it before sharing
 4. Wait for loading to finish while the world is loading. Guest actions become
    available after that. F2 closes the menu and releases the mouse for gameplay.
 
-The host uses the normal game controls. Guests use **WASD**, the mouse,
-**Space** to jump, **left click** for the selected tool, **E** to pick up,
-**G** to put down, **R** to throw and **Delete** to dismantle. Guests can select
-unlocked tools with **1–8** or in the F2 menu. That menu also provides purchases,
-research, building selection, needle delivery and machine on/off controls.
+Guests can use the native building catalog (**B**), research tree (**Tab / T**)
+and pause menu (**Escape**). Movement and world actions stop for that player while
+a menu is open. Research purchases and building actions are confirmed by the host;
+guest save/load controls are disabled. F2 remains available for co-op controls.
+
+Default guest controls: **WASD**, mouse, **Space** to jump, **Shift** to sprint
+with native stamina, **left click** to use, **E** to pick up, **Q** to drop,
+**F / right click** to throw, **X** to dismantle and **1–0** for the native hotbar.
+These actions follow the game's personal input bindings. Purchased standard tools
+are shared unlocks: everyone can select and use their own copy immediately.
+Dropping or picking up a copy does not take the tool away from another player.
+Containers such as buckets remain physical objects. F2 also offers shop purchases,
+needle delivery and machine on/off controls.
 Purchases require the usual proximity to the shop and enough shared money.
 Deliver needles at the appropriate cabinet; machines and buildings must be
 within reach.
@@ -203,7 +211,7 @@ available. It does not download or install anything. Checks are limited to once
 per minute; an offline/rate-limit error leaves play available. No player name,
 Steam ID, lobby identifier, local path, report or save data is included.
 
-Version 0.4.0 is published as a normal GitHub release. Internet play between
+Version 0.4.1 is published as a normal GitHub release. Internet play between
 separate Steam accounts remains unverified.
 
 ## Save and leave
@@ -241,8 +249,12 @@ a verified version.
   including conveyor construction, needle delivery, tools, cancel/rejoin and
   save/reload. Local test suites also cover session behavior, world
   synchronization, saving and installation.
-- Guests use the mod's own co-op controls. Not every native special function or
-  decorative effect has been tested with friends.
+- Native guest building/research/pause menus are integrated; other special
+  functions and decorative effects still need testing with friends.
+- Mixed Windows/Linux joining has been reported, together with Linux host crashes.
+  The Proton crash cause is still unconfirmed; 0.4.1 does not establish a crash fix.
+- If guest movement is blocked immediately after joining, switching away with
+  Alt+Tab and back has helped in a reported session. An automatic focus fix is unverified.
 - The demo disables its leaderboards when mods are loaded.
 - Invitations, Steam data transfer over the Internet and four separate accounts
   remain unverified. The steps are in the
