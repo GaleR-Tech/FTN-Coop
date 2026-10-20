@@ -9,7 +9,7 @@
 - The gate countdown displays the host's remaining time using the original digit geometry. It does not overwrite the guest's personal Profile countdown.
 - Old regular and fragmented world events are ignored while a replacement baseline is being received or loaded. They can no longer repeatedly restart that recovery; fresh catch-up events apply after loading.
 - Copied error reports now include an allowlisted recovery cause in English or German. No player names, account IDs, profile data or saves are added.
-- The first trigger of the reported intermittent recovery, the reported unlimited tool duplication and Linux/Proton host crashes are not confirmed resolved. All players must install 0.5.2 and restart the demo.
+- The first trigger of the reported intermittent recovery, the reported unlimited tool duplication and native loading crashes on Windows or Linux/Proton are not confirmed resolved. All players must install 0.5.2 and restart the demo.
 
 ### Deutsch
 
@@ -18,7 +18,7 @@
 - Die Toranzeige übernimmt die Restzeit des Hosts mit den Originalziffern. Der persönliche Profil-Countdown des Gasts wird dabei nicht überschrieben.
 - Alte normale und aufgeteilte Weltmeldungen werden während Empfang und Laden einer Ersatzwelt verworfen. Sie können diesen Wiederabgleich nicht mehr wiederholt neu starten; neue Änderungen werden nach dem Laden übernommen.
 - Kopierte Fehlerberichte enthalten jetzt einen fest definierten Abgleichgrund mit deutscher oder englischer Beschriftung. Spielernamen, Konto-IDs, Profildaten und Spielstände werden nicht ergänzt.
-- Der erste Auslöser gelegentlicher Wiederabgleiche, die gemeldete unbegrenzte Werkzeugverdopplung und Linux-/Proton-Host-Abstürze sind noch nicht als behoben bestätigt. Alle Spieler müssen 0.5.2 installieren und die Demo neu starten.
+- Der erste Auslöser gelegentlicher Wiederabgleiche, die gemeldete unbegrenzte Werkzeugverdopplung und native Ladeabstürze unter Windows oder Linux/Proton sind noch nicht als behoben bestätigt. Alle Spieler müssen 0.5.2 installieren und die Demo neu starten.
 
 ## 0.5.1 · 2026-10-20
 
