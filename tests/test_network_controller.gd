@@ -45,6 +45,16 @@ class RejectTransport extends "res://tests/fixtures/fake_transport.gd":
 class FullTransfer extends Node:
 	func buffer_event(_event: Dictionary) -> Dictionary: return {"ok":false,"code":"RESYNC_REQUIRED","value":null}
 
+class TrafficTransport extends "res://tests/fixtures/fake_transport.gd":
+	var messages: Array[Dictionary] = []
+	var blocked := false
+	func local_peer_id() -> int: return 1
+	func send(peer: int, _channel: int, bytes: PackedByteArray, reliable: bool) -> Dictionary:
+		if blocked and peer==2 and reliable: return {"ok":false,"code":"WOULD_BLOCK","value":null}
+		var decoded: Dictionary = load("res://mods/ftn_coop/protocol.gd").new().decode(bytes)
+		if decoded.ok: messages.append({"peer":peer,"type":decoded.value.type,"body":decoded.value.body})
+		return {"ok":true,"code":"OK","value":null}
+
 class SaturatedTransport extends "res://tests/fixtures/pipe_transport.gd":
 	const CAPACITY := 65536
 	var pending: Array[Dictionary] = []
@@ -168,6 +178,98 @@ func run(tree: SceneTree) -> Array[String]:
 	errors.append_array(_steam_send_results())
 	errors.append_array(await _disconnect_during_broadcast(tree))
 	errors.append_array(await _fragmented_event_backpressure(tree))
+	errors.append_array(await _fair_network_traffic(tree))
+	errors.append_array(await _idle_pose_traffic(tree))
+	return errors
+
+func _fair_network_traffic(tree: SceneTree) -> Array[String]:
+	var errors: Array[String] = []
+	var wire := TrafficTransport.new()
+	var game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
+	game.tree = tree
+	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
+	for node in [wire,controller]: tree.root.add_child(node)
+	controller.configure(wire,game,"25963876","0.6.1")
+	controller.set_process(false)
+	controller.pose_stream_enabled = false
+	controller.session.is_host = true
+	controller.session.state = controller.session.State.PLAYING
+	controller.session.session_id = "0123456789abcdef0123456789abcdef"
+	for revision in range(1,25): controller._queue(2,"EVENT",{"revision":revision,"patch":{}})
+	controller._queue(3,"STATUS_PROBE",{"token":7})
+	controller._queue(2,"POSE",{"peer":1,"pose":{"position":Vector3(4,0,0)}},false)
+	controller._drain_packets(0.01)
+	var healthy := false
+	var moving := false
+	for message in wire.messages:
+		if message.peer==3 and message.type=="STATUS_PROBE": healthy = true
+		if message.peer==2 and message.type=="POSE": moving = true
+	if not healthy: errors.append("A large join stream must not consume another guest's entire frame send budget.")
+	if not moving: errors.append("Current movement must pass a backlog of independent reliable world packets in the same frame.")
+	for frame in range(5): controller._drain_packets(0.01)
+	var revisions: Array = []
+	for message in wire.messages:
+		if message.type=="EVENT": revisions.append(message.body.revision)
+	if revisions!=range(1,25): errors.append("Fair scheduling must preserve every reliable revision exactly once and in order.")
+	wire.messages.clear()
+	wire.blocked = true
+	controller._send_blocked[2] = 20.0
+	controller._queue(2,"EVENT",{"revision":25,"patch":{}})
+	controller._queue(2,"POSE",{"peer":1,"pose":{"position":Vector3(5,0,0)}},false)
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=1 or wire.messages[0].type!="POSE" or controller._tx.size()!=1:
+		errors.append("A blocked reliable packet must remain queued while an independently deliverable movement packet can leave.")
+	if controller._send_blocked.get(2,0.0)<20.0: errors.append("Successful lossy movement must not reset a blocked reliable stream's timeout.")
+	wire.blocked = false
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=2 or wire.messages[1].type!="EVENT" or wire.messages[1].body.revision!=25:
+		errors.append("A blocked world packet must still arrive exactly once after movement has passed it.")
+	controller.leave()
+	for node in [controller,wire]: node.queue_free()
+	await tree.process_frame
+	return errors
+
+func _idle_pose_traffic(tree: SceneTree) -> Array[String]:
+	var errors: Array[String] = []
+	var wire := TrafficTransport.new()
+	var game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
+	game.tree = tree
+	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
+	for node in [wire,controller]: tree.root.add_child(node)
+	controller.configure(wire,game,"25963876","0.6.1")
+	controller.set_process(false)
+	controller.session.is_host = true
+	controller.session.state = controller.session.State.PLAYING
+	controller.session.session_id = "0123456789abcdef0123456789abcdef"
+	var standing := {"peer":1,"pose":{"position":Vector3.ZERO,"rotation":Vector3.ZERO,"tool":0}}
+	controller._queue(2,"POSE",standing,false)
+	controller._drain_packets(0.01)
+	for frame in range(30):
+		controller._queue(2,"POSE",standing,false)
+		controller._drain_packets(0.001)
+	if wire.messages.size()!=1: errors.append("Unchanged standing poses must not flood the network between keepalives.")
+	controller._queue(3,"POSE",standing,false)
+	controller._queue(2,"POSE",{"peer":4,"pose":standing.pose},false)
+	var changed := standing.duplicate(true)
+	changed.pose.tool = 1
+	controller._queue(2,"POSE",changed,false)
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=4: errors.append("New destinations, different players and a changed tool must each publish immediately, even at an unchanged position.")
+	await tree.create_timer(0.55).timeout
+	controller._queue(2,"POSE",changed,false)
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=5: errors.append("A stationary player's latest pose must be resent after a half-second keepalive so packet loss can recover.")
+	controller._discard_packets(2)
+	controller._queue(2,"POSE",changed,false)
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=6: errors.append("A reused peer connection must publish its first pose immediately, without the departed stream's suppression state.")
+	controller.leave()
+	controller.session.session_id = "fedcba9876543210fedcba9876543210"
+	controller._queue(2,"POSE",changed,false)
+	controller._drain_packets(0.01)
+	if wire.messages.size()!=7: errors.append("A new session must publish its initial pose immediately even when the same destination and pose were just used.")
+	for node in [controller,wire]: node.queue_free()
+	await tree.process_frame
 	return errors
 
 func _fragmented_event_backpressure(tree: SceneTree) -> Array[String]:

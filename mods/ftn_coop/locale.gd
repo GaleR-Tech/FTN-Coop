@@ -6,7 +6,7 @@ const EN := {
 	"Hier bauen":"Build here",
 	"Hier liegt eine Nadel":"Needle here",
 	"Hilfe":"Help",
-	"F3 setzt eine Markierung auf das angeschaute Ziel.":"F3 marks the surface under your crosshair.",
+	"F8 setzt eine Markierung auf das angeschaute Ziel.":"F8 marks the surface under your crosshair.",
 	"Wird geladen":"Loading",
 	"Wird abgeglichen":"Synchronizing",
 	"Spielt":"Playing",

@@ -101,11 +101,22 @@ func _runtime_controls(tree: SceneTree) -> Array[String]:
 	key.pressed = true
 	runtime._unhandled_input(key)
 	runtime._physics_process(0.0)
+	if not runtime.network.collaboration_snapshot().markers.is_empty(): errors.append("The game's F3 shortcut must never create a co-op marker.")
+	runtime._marker_cooldown = 0.0
+	runtime.network._markers.clear()
+	key.physical_keycode = KEY_F8
+	runtime._unhandled_input(key)
+	runtime._physics_process(0.0)
 	var markers: Array = runtime.network.collaboration_snapshot().markers
-	if markers.size()!=1 or markers[0].kind!="build": errors.append("F3 must create the selected marker through the real runtime and host controller. mouse="+str(Input.mouse_mode)+" allowed="+str(runtime._marker_input_allowed())+" state="+str(runtime.network.session.state))
+	if markers.size()!=1 or markers[0].kind!="build": errors.append("F8 must create the selected marker through the real runtime and host controller. mouse="+str(Input.mouse_mode)+" allowed="+str(runtime._marker_input_allowed())+" state="+str(runtime.network.session.state))
 	runtime.network._markers.advance(1.0)
 	runtime._marker_cooldown = 0.0
 	runtime.ui._marker_selector.select(0)
+	InputMap.add_action("ftn_test_native_f8")
+	InputMap.action_add_event("ftn_test_native_f8",key)
+	runtime._unhandled_input(key)
+	if runtime._marker_requested: errors.append("A player's existing game binding on F8 must take priority over co-op markers.")
+	InputMap.erase_action("ftn_test_native_f8")
 	key.echo = true
 	runtime._unhandled_input(key)
 	runtime._physics_process(0.0)

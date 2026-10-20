@@ -569,6 +569,7 @@ func _live_frame() -> Dictionary:
 
 func _loose_module() -> RefCounted:
 	if _loose == null: _loose = load(MODULE_DIR+"/loose_sync.gd").new()
+	if nodes.has("live") and is_instance_valid(nodes.live): _loose.use_native_visuals(nodes.live)
 	return _loose
 
 func _difference(before: Dictionary, after: Dictionary) -> Dictionary:
@@ -619,9 +620,12 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 				_collision_tree.node_added.connect(_guard_collision_node)
 				_collision_tree.node_removed.connect(_forget_guest_collider)
 			_guard_collision_branch(nodes.world)
-		return _prepare_guest_field()
+		var prepared := _prepare_guest_field()
+		if prepared.ok: load(MODULE_DIR+"/guest_field.gd").set_initial_guest_mode(true)
+		return prepared
 	# Restoring persistence requires the lifecycle's explicit origin restoration.
 	if not _save_origin.is_empty(): return _error("GUEST_SESSION_ACTIVE")
+	load(MODULE_DIR+"/guest_field.gd").set_initial_guest_mode(false)
 	restore_shared_settings()
 	if _guest_field!=null:
 		_guest_field.restore()

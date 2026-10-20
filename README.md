@@ -1,4 +1,4 @@
-# FTN-Coop · 0.6.0
+# FTN-Coop · 0.6.1
 
 [English](#english) · [Deutsch](#deutsch)
 
@@ -8,7 +8,7 @@ An independent, unofficial co-op mod for **Find The Needle Demo** (Windows; Linu
 One host and up to three friends work in the same world. Money, research,
 hay, buildings and needles belong to the shared session.
 
-Version **0.6.0** checks Steam's real send result and waits for buffer space instead of losing world updates under load. Guest hay uses the complete native render scheduler with host-controlled simulation; unchanged baseline heights no longer rebuild the entire pile. Every participant must update and restart the demo. Linux/Proton crashes remain unconfirmed resolved.
+Version **0.6.1** moves surface markers to **F8**, preserving the game's F3 debug shortcut. Guest hay is protected from local reshaping before loading begins, and loose straw uses the native mesh, materials and host tint. Unchanged poses use a half-second keepalive; current movement is sent ahead of bulk world transfers with a separate budget for each destination. All players must update and restart the demo. The reported pile appearance still needs a test on the affected PCs; Linux/Proton crash resolution remains unconfirmed.
 
 **Development status: Internet play between different Steam accounts is still
 unverified.** Local checks use real demo instances, but do not replace a test
@@ -51,7 +51,7 @@ content continues to use its own language settings.
 
 New in 0.1.3: The installer has a dark interface with gold accents. It shows the installed and package versions and selects the matching action. The progress indicator stays indeterminate while files are being processed; completion is only shown after the result is known. The **GitHub project** link opens the source repository in your browser.
 
-The easiest option is **FTN-Coop-0.6.0-Setup.exe**:
+The easiest option is **FTN-Coop-0.6.1-Setup.exe**:
 
 1. Close the game and double-click the EXE.
 2. Check the automatically detected demo folder, or select it using **Browse…**.
@@ -81,7 +81,7 @@ settings and other mod files into account.
 
 ### Linux installation (Ubuntu / Mint)
 
-New in **0.4.0**: download **FTN-Coop-0.6.0-Linux.run** from Releases.
+New in **0.4.0**: download **FTN-Coop-0.6.1-Linux.run** from Releases.
 This single file includes the installer and all mod files. It needs **Python 3.8
 or later**, with **python3-tk** for the optional graphical window; no pip packages
 are required. Close the demo before installing, updating or removing the mod.
@@ -91,7 +91,7 @@ are required. Close the demo before installing, updating or removing the mod.
 2. In a terminal, change to the folder containing the downloaded file and run:
 
    ```sh
-   python3 FTN-Coop-0.6.0-Linux.run
+   python3 FTN-Coop-0.6.1-Linux.run
    ```
 
 3. Check the detected demo folder, or select it using **Browse**. Click **Install**
@@ -102,7 +102,7 @@ are required. Close the demo before installing, updating or removing the mod.
 If the graphical window is unavailable, use the terminal interface:
 
 ```sh
-python3 FTN-Coop-0.6.0-Linux.run --cli
+python3 FTN-Coop-0.6.1-Linux.run --cli
 ```
 
 For a specific folder, use `--install --game-dir "/path/to/Find The Needle Demo"`;
@@ -119,7 +119,7 @@ binaries, saves and unrelated mods are kept. The installer downloads nothing.
 **Verification limit:** filesystem, package and GUI tests were run on the Windows
 development computer. Execution on Ubuntu/Mint, the graphical desktop integration,
 Proton gameplay and Windows/Linux multiplayer still require a real Linux test.
-All participants must use **0.6.0** and demo build **25963876**. Internet play
+All participants must use **0.6.1** and demo build **25963876**. Internet play
 between separate Steam accounts remains unverified.
 
 ### Play with friends
@@ -186,7 +186,7 @@ written into the guest's personal settings file.
 
 ### Markers, player status and rejoining
 
-New in **0.3.0**: press **F3** during play to mark the surface under your crosshair,
+New in **0.3.0**: press **F8** during play to mark the surface under your crosshair,
 up to 50 meters away. In F2, choose **Point**, **Build here**, **Needle here** or
 **Help**. Each player has one marker, which lasts 20 seconds; a new one replaces
 it. Markers, names and avatars use matching player colors. Menus, text input
@@ -213,7 +213,7 @@ nothing is downloaded or installed automatically. Checks are limited to once
 per minute. Offline/rate-limit errors leave play available. Player names,
 Steam IDs, lobby identifiers, local paths, reports and saves are not included.
 
-0.6.0 is published as a normal GitHub release. Internet play between separate
+0.6.1 is published as a normal GitHub release. Internet play between separate
 Steam accounts remains unverified.
 
 ### Save and leave
@@ -254,7 +254,7 @@ a verified version.
 - Native guest building/research/pause menus are integrated; other special
   functions and decorative effects still need testing with friends.
 - Mixed Windows/Linux joining has been reported, together with Linux host crashes.
-  The Proton crash cause is still unconfirmed; 0.6.0 does not establish a crash fix.
+  The Proton crash cause is still unconfirmed; 0.6.1 does not establish a crash fix.
 - If guest movement is blocked immediately after joining, switching away with
   Alt+Tab and back has helped in a reported session. An automatic focus fix is unverified.
 - The demo disables its leaderboards when mods are loaded.
@@ -274,7 +274,7 @@ Eigene, inoffizielle Koop-Mod für **Find The Needle Demo** (Windows; Linux-Inst
 Ein Host und bis zu drei Freunde arbeiten in derselben Welt. Geld, Forschung,
 Heu, Gebäude und Nadeln gehören zur gemeinsamen Sitzung.
 
-Version **0.6.0** prüft das tatsächliche Steam-Sendeergebnis und wartet bei vollem Puffer, statt Weltänderungen unter Last zu verlieren. Gäste verwenden den vollständigen nativen Zeichenablauf bei weiterhin vom Host gesteuerter Simulation; unveränderte Höhen beim Beitritt bauen den Haufen nicht mehr unnötig neu auf. Alle Teilnehmer müssen aktualisieren und die Demo neu starten. Linux-/Proton-Abstürze sind noch nicht als behoben bestätigt.
+Version **0.6.1** verlegt Markierungen auf **F8**; F3 bleibt für die Debuganzeige des Spiels frei. Gäste verändern den Haufen bereits beim Laden nicht mehr selbst. Lose Halme nutzen native Geometrie, Materialien und die Farbe des Hosts. Unveränderte Positionen werden nur noch alle halbe Sekunde erneut gesendet; aktuelle Bewegungen erhalten Vorrang vor großen Weltdaten mit einem eigenen Sendebudget je Empfänger. Alle müssen aktualisieren und die Demo neu starten. Die gemeldete Haufendarstellung benötigt noch einen Test auf den betroffenen PCs; Linux-/Proton-Abstürze sind nicht als behoben bestätigt.
 
 **Entwicklungsstand: Internetbetrieb zwischen verschiedenen Steam-Konten ist
 noch unbestätigt.** Die lokalen Prüfungen verwenden echte Demo-Instanzen,
@@ -315,7 +315,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.6.0-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.6.1-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -342,7 +342,7 @@ und andere Mod-Dateien werden bei der Entfernung berücksichtigt.
 
 ### Linux-Installation (Ubuntu / Mint)
 
-Neu in **0.4.0**: **FTN-Coop-0.6.0-Linux.run** unter Releases herunterladen.
+Neu in **0.4.0**: **FTN-Coop-0.6.1-Linux.run** unter Releases herunterladen.
 Die einzelne Datei enthält den Installer und alle Mod-Dateien. Benötigt werden
 **Python 3.8 oder neuer** und für das optionale Fenster **python3-tk**; zusätzliche
 pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schließen.
@@ -352,7 +352,7 @@ pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schl
 2. Im Terminal in den Download-Ordner wechseln und starten:
 
    ```sh
-   python3 FTN-Coop-0.6.0-Linux.run
+   python3 FTN-Coop-0.6.1-Linux.run
    ```
 
 3. Erkannten Demo-Ordner prüfen oder über **Ordner auswählen** ändern. **Installieren**
@@ -364,7 +364,7 @@ pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schl
 Ohne grafisches Fenster steht die Terminal-Oberfläche bereit:
 
 ```sh
-python3 FTN-Coop-0.6.0-Linux.run --cli
+python3 FTN-Coop-0.6.1-Linux.run --cli
 ```
 
 Einen bestimmten Ordner mit `--install --game-dir "/pfad/zu/Find The Needle Demo"`
@@ -382,7 +382,7 @@ und andere Mods bleiben erhalten. Der Installer lädt nichts nach.
 **Prüfgrenze:** Datei-, Paket- und Oberflächentests liefen auf dem Windows-
 Entwicklungsrechner. Ausführung unter Ubuntu/Mint, Desktop-Integration,
 Proton-Spielbetrieb und gemeinsame Windows/Linux-Sitzungen benötigen noch einen
-echten Linux-Test. Alle Teilnehmer brauchen **0.6.0** und Demo-Build **25963876**.
+echten Linux-Test. Alle Teilnehmer brauchen **0.6.1** und Demo-Build **25963876**.
 Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
 
 ### Mit Freunden spielen
@@ -454,11 +454,11 @@ die persönliche Einstellungsdatei des Gastes geschrieben.
 
 ### Markierungen, Spielerstatus und Wiederbeitritt
 
-Neu in **0.3.0**: **F3** markiert beim Spielen die angeschaute Oberfläche in
+Neu in **0.3.0**: **F8** markiert beim Spielen die angeschaute Oberfläche in
 höchstens 50 Metern Entfernung. In F2 wählst du **Markierung**, **Hier bauen**,
 **Hier liegt eine Nadel** oder **Hilfe**. Jeder hat eine Markierung für 20 Sekunden;
 eine neue ersetzt sie. Markierungen, Namen und Figuren verwenden passende
-Spielerfarben. Menüs, Texteingaben und das Laden einer Welt sperren F3-Markierungen.
+Spielerfarben. Menüs, Texteingaben und das Laden einer Welt sperren F8-Markierungen.
 
 F2 zeigt Laden/Abgleichen/Spielen und die gemessene Antwortzeit. Fehlende Messungen
 werden als nicht verfügbar angezeigt; der lokale Host steht als **Host** in der
@@ -484,7 +484,7 @@ pro Minute möglich. Ohne Verbindung oder bei einem Anfragelimit bleibt das Spie
 benutzbar. Spielernamen, Steam-IDs, Lobbykennungen, lokale Pfade, Berichte und
 Spielstände werden nicht mitgeschickt.
 
-0.6.0 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
+0.6.1 erscheint als normale GitHub-Veröffentlichung. Der Internetbetrieb mit
 getrennten Steam-Konten bleibt unbestätigt.
 
 ### Speichern und Verlassen
@@ -527,7 +527,7 @@ die Mod entfernen und auf eine geprüfte Fassung warten.
 - Die originalen Bau-, Forschungs- und Pausemenüs sind für Gäste eingebunden;
   weitere Sonderfunktionen und dekorative Effekte benötigen Tests mit Freunden.
 - Gemeinsame Windows/Linux-Beitritte wurden gemeldet, ebenso Linux-Host-Abstürze.
-  Die Proton-Absturzursache ist ungeklärt; 0.6.0 bestätigt keine Absturzbehebung.
+  Die Proton-Absturzursache ist ungeklärt; 0.6.1 bestätigt keine Absturzbehebung.
 - Falls Gäste direkt nach dem Beitritt nicht laufen können, half in einer
   gemeldeten Sitzung Alt+Tab und Zurückwechseln. Eine automatische Fokuskorrektur ist unbestätigt.
 - Die Demo schaltet bei geladenen Mods ihre Bestenlisten ab.

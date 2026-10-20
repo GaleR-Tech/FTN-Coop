@@ -104,12 +104,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.6.0")
+		_runtime.configure(_adapter,transport,"25963876","0.6.1")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.6.0")
+		_network.configure(transport,_adapter,"25963876","0.6.1")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
@@ -147,7 +147,7 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 		_checks.settings_disk_restored = _adapter.read_shared_settings().value==_settings_original and is_equal_approx(float(_adapter.nodes.cfg.get("mouse_sensitivity")),0.42)
 		if not _checks.settings_restored or not _checks.settings_disk_restored or not _checks.get("settings_live",false): _fatal = "SETTINGS_RESTORE_FAILED"
 		if _presence_check:
-			for key in ["native_f3","marker_common","marker_colors","connection_status","preset_live"]:
+			for key in ["native_marker","marker_common","marker_colors","connection_status","preset_live"]:
 				if not _checks.get(key,false): _fatal = "CHECK_"+key.to_upper()
 			if _index==1 and not _checks.get("rejoin_button",false): _fatal = "REJOIN_BUTTON_FAILED"
 	if _save_check and _fatal.is_empty():
@@ -442,7 +442,7 @@ func _extra_actions() -> void:
 		_fatal = "LOADED_DEPARTURE_FAILED"
 		_done = false
 	if _presence_check:
-		for key in ["native_f3","marker_common","marker_colors","connection_status","marker_departure_cleanup","preset_roundtrip"]:
+		for key in ["native_marker","marker_common","marker_colors","connection_status","marker_departure_cleanup","preset_roundtrip"]:
 			if not _checks.get(key,false):
 				_fatal = "CHECK_"+key.to_upper()
 				_done = false
@@ -462,7 +462,7 @@ func _place_native_marker() -> bool:
 	for frame in range(4): await get_tree().physics_frame
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	var key := InputEventKey.new()
-	key.physical_keycode = KEY_F3
+	key.physical_keycode = KEY_F8
 	key.pressed = true
 	_checks.marker_input = {"allowed":_runtime._marker_input_allowed(),"mouse":Input.mouse_mode,"state":_network.session.state,"position":str(player.global_position),"camera":str(player.get("camera").global_basis.z)}
 	_runtime._unhandled_input(key)
@@ -502,7 +502,7 @@ func _guest_collaboration() -> void:
 	_stage = "collab_ready"
 	var deadline := Time.get_ticks_msec()+(240000 if _count==4 else 90000)
 	while _read("host").get("stage")!="collab_place_"+str(_index) and Time.get_ticks_msec()<deadline: await get_tree().process_frame
-	_checks.native_f3 = await _place_native_marker()
+	_checks.native_marker = await _place_native_marker()
 	_stage = "collab_marked"
 	while _read("host").get("stage")!="collab_verify" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
 	for frame in range(4): await get_tree().process_frame
@@ -523,14 +523,14 @@ func _guest_collaboration() -> void:
 		_expected_disconnect = false
 		_stage = "collab_rejoined"
 	while _read("host").get("stage")!="collab_finish" and Time.get_ticks_msec()<deadline: await get_tree().process_frame
-	for key in ["native_f3","marker_common","marker_colors","connection_status"]:
+	for key in ["native_marker","marker_common","marker_colors","connection_status"]:
 		if not _checks.get(key,false): _fatal = "CHECK_"+key.to_upper()
 	if _index==1 and not _checks.get("rejoin_button",false): _fatal = "REJOIN_BUTTON_FAILED"
 	if Time.get_ticks_msec()>=deadline: _fatal = "COLLABORATION_TIMEOUT"
 
 func _host_collaboration() -> void:
 	_stage = "collab_place"
-	_checks.native_f3 = await _place_native_marker()
+	_checks.native_marker = await _place_native_marker()
 	var deadline := Time.get_ticks_msec()+90000
 	# Only one native window can own captured mouse input on this test PC.
 	for index in range(1,_count):

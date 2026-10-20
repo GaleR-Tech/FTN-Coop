@@ -203,7 +203,7 @@ func _ready() -> void:
 	_rejoin_button = _button(box,"Letzter Sitzung erneut beitreten",func(): rejoin_requested.emit())
 	_marker_box = VBoxContainer.new()
 	box.add_child(_marker_box)
-	_label(_marker_box,"F3 setzt eine Markierung auf das angeschaute Ziel.")
+	_label(_marker_box,"F8 setzt eine Markierung auf das angeschaute Ziel.")
 	_marker_selector = OptionButton.new()
 	for kind in ["point","build","needle","help"]:
 		_marker_selector.add_item(kind)

@@ -1,5 +1,25 @@
 # Changelog / Änderungen
 
+## 0.6.1 · 2026-10-20
+
+### English
+
+- Surface markers move to F8. F3 remains the game's debug shortcut; an existing custom game binding on F8 takes priority over markers.
+- Replacement guest hay fields now start with the simulation guard already enabled. In a saved modified-pile probe, local restoration changed 620 host height vertices with the late guard and zero with early protection. Native mesh workers and the renderer remain in use.
+- Loose straw replicas use the game's runtime mesh and material plus the host's per-straw tint. They occupy their own render-only batch and do not borrow physical pool objects or create collectible copies. Needle shapes remain simplified.
+- Identical poses are suppressed separately for each destination and actor, with a half-second keepalive. Changed positions, look and equipment still publish immediately at the existing movement tick.
+- Latest movement is sent before bulk world data. Per-destination frame budgets prevent one joining guest from consuming all send attempts. Reliable packet ordering, checked Steam results and blocked-send timeouts are retained.
+- These are independent changes informed by comparison with the alternative mod; no source code from it was copied. Install 0.6.1 on every participant and restart the demo. The exact reported orange pile-shell artifact, Linux/Proton crashes and a two-PC Steam Internet session still need validation on the affected systems.
+
+### Deutsch
+
+- Oberflächenmarkierungen liegen jetzt auf F8. F3 bleibt die Debugtaste des Spiels; eine bereits vorhandene eigene Spielbelegung auf F8 hat Vorrang vor Markierungen.
+- Neue Gast-Heufelder starten bereits mit aktiver Simulationssperre. Beim Laden eines gespeicherten bearbeiteten Haufens veränderte die bisherige späte Sperre lokal 620 Host-Höhenpunkte; mit früher Sperre waren es null. Native Zeichenaufträge und Renderer bleiben erhalten.
+- Lose Halme verwenden die Geometrie und Materialien des laufenden Spiels sowie die jeweilige Halmfarbe des Hosts. Sie liegen in einer eigenen reinen Zeicheninstanz und verwenden weder physische Poolobjekte noch einsammelbare Kopien. Nadelformen bleiben vereinfacht.
+- Identische Positionen werden getrennt nach Empfänger und Spieler zurückgehalten und nach einer halben Sekunde erneut gesendet. Geänderte Position, Blickrichtung und Ausrüstung werden weiterhin im bisherigen Bewegungstakt übertragen.
+- Aktuelle Bewegung hat Vorrang vor großen Weltdaten. Eigene Sendebudgets je Empfänger verhindern, dass ein neuer Gast alle Sendeversuche belegt. Reihenfolge zuverlässiger Pakete, geprüfte Steam-Ergebnisse und Zeitüberschreitungen bleiben erhalten.
+- Die Änderungen wurden nach dem Vergleich mit der alternativen Mod eigenständig entwickelt; deren Quellcode wurde nicht kopiert. Alle müssen 0.6.1 installieren und die Demo neu starten. Die konkret gemeldete orange Haufenschicht, Linux-/Proton-Abstürze und eine Steam-Internetsitzung mit zwei PCs benötigen noch eine Prüfung auf den betroffenen Systemen.
+
 ## 0.6.0 · 2026-10-20
 
 ### English

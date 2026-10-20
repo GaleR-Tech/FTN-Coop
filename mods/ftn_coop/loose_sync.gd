@@ -1,12 +1,24 @@
 extends RefCounted
 
 const LIMIT := 8192
-var current := {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array()}
+var current := {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}
 var _ids: Dictionary = {}
 var _next_id := 1
 var _root: Node3D
 var _hay: MultiMesh
 var _needles: MultiMesh
+var _native_mesh: Mesh
+var _native_material: Material
+
+func use_native_visuals(source: Node) -> void:
+	if not is_instance_valid(source): return
+	var instance: Variant = source.get("_mmi")
+	if not instance is MultiMeshInstance3D or instance.multimesh==null or instance.multimesh.mesh==null: return
+	_native_mesh = instance.multimesh.mesh
+	_native_material = instance.material_override
+	if is_instance_valid(_root):
+		_hay.mesh = _native_mesh
+		_root.get_child(0).material_override = _native_material
 
 func capture_sources(hay: Array, needles: Array) -> Dictionary:
 	if hay.size()+needles.size()>LIMIT: return _error("LOOSE_LIMIT")
@@ -20,32 +32,40 @@ func capture_sources(hay: Array, needles: Array) -> Dictionary:
 				_ids[body] = _next_id
 				_next_id += 1
 			seen[body] = true
-			records[_ids[body]] = {"kind":kind,"transform":body.global_transform}
+			records[_ids[body]] = {"kind":kind,"transform":body.global_transform,"color":body.get_meta("tint",Color.WHITE) if kind==0 else Color.WHITE}
 	for body in _ids.keys():
 		if not is_instance_valid(body) or not seen.has(body): _ids.erase(body)
 	var ids := PackedInt32Array()
 	var kinds := PackedByteArray()
 	var poses := PackedFloat32Array()
+	var colors := PackedColorArray()
 	var ordered := records.keys()
 	ordered.sort()
 	for id in ordered:
 		ids.append(id)
 		kinds.append(records[id].kind)
+		if not records[id].color is Color: return _error("LOOSE_INVALID")
+		colors.append(records[id].color)
 		var transform: Transform3D = records[id].transform
 		for vector in [transform.basis.x,transform.basis.y,transform.basis.z,transform.origin]:
 			poses.append_array(PackedFloat32Array([vector.x,vector.y,vector.z]))
-	var data := {"ids":ids,"kinds":kinds,"poses":poses}
+	var data := {"ids":ids,"kinds":kinds,"poses":poses,"colors":colors}
 	if not validate(data): return _error("LOOSE_INVALID")
 	return _ok(data)
 
 func validate(data: Dictionary) -> bool:
-	if data.size()!=3 or not data.get("ids") is PackedInt32Array or not data.get("kinds") is PackedByteArray or not data.get("poses") is PackedFloat32Array: return false
+	if data.size() not in [3,4] or not data.get("ids") is PackedInt32Array or not data.get("kinds") is PackedByteArray or not data.get("poses") is PackedFloat32Array: return false
 	var size: int = data.ids.size()
 	if size>LIMIT or data.kinds.size()!=size or data.poses.size()!=12*size: return false
+	if data.size()==4 and (not data.get("colors") is PackedColorArray or data.colors.size()!=size): return false
 	var previous := 0
 	for index in range(size):
 		if data.ids[index]<=previous or data.kinds[index]>1: return false
 		previous = data.ids[index]
+		if data.has("colors"):
+			var tint: Color = data.colors[index]
+			for channel in [tint.r,tint.g,tint.b,tint.a]:
+				if not is_finite(channel) or channel<0.0 or channel>4.0: return false
 		for component in range(12):
 			var value: float = data.poses[index*12+component]
 			if not is_finite(value) or absf(value)>(8.0 if component<9 else 2048.0): return false
@@ -67,6 +87,7 @@ func apply(data: Dictionary, parent: Node) -> Dictionary:
 		var transform := Transform3D(Basis(Vector3(p[offset],p[offset+1],p[offset+2]),Vector3(p[offset+3],p[offset+4],p[offset+5]),Vector3(p[offset+6],p[offset+7],p[offset+8])),Vector3(p[offset+9],p[offset+10],p[offset+11]))
 		if data.kinds[index]==0:
 			_hay.set_instance_transform(next_hay,transform)
+			_hay.set_instance_color(next_hay,data.colors[index] if data.has("colors") else Color.WHITE)
 			next_hay += 1
 		else:
 			_needles.set_instance_transform(next_needle,transform)
@@ -78,22 +99,29 @@ func _create_visuals(parent: Node) -> void:
 	_root = Node3D.new()
 	_root.name = "FtnCoopLooseResources"
 	parent.add_child(_root)
-	var straw := BoxMesh.new()
-	straw.size = Vector3(0.025,0.025,0.3)
-	_hay = _batch(straw,Color(0.72,0.5,0.15))
+	var straw: Mesh = _native_mesh
+	if straw==null:
+		var fallback := BoxMesh.new()
+		fallback.size = Vector3(0.025,0.025,0.3)
+		straw = fallback
+	_hay = _batch(straw,Color(0.72,0.5,0.15),_native_mesh!=null)
+	_root.get_child(0).material_override = _native_material
 	var needle := CylinderMesh.new()
 	needle.top_radius = 0.006
 	needle.bottom_radius = 0.006
 	needle.height = 0.25
 	_needles = _batch(needle,Color(0.8,0.85,0.9))
 
-func _batch(mesh: Mesh, color: Color) -> MultiMesh:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.7
-	mesh.material = material
+func _batch(mesh: Mesh, color: Color, native: bool=false) -> MultiMesh:
+	if not native:
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = 0.7
+		material.vertex_color_use_as_albedo = true
+		mesh.material = material
 	var batch := MultiMesh.new()
 	batch.transform_format = MultiMesh.TRANSFORM_3D
+	batch.use_colors = true
 	batch.mesh = mesh
 	var instance := MultiMeshInstance3D.new()
 	instance.multimesh = batch
@@ -104,7 +132,9 @@ func close() -> void:
 	if is_instance_valid(_root): _root.queue_free()
 	_root = null
 	_ids.clear()
-	current = {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array()}
+	_native_mesh = null
+	_native_material = null
+	current = {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}
 
 func _ok(value: Variant=null) -> Dictionary:
 	return {"ok":true,"code":"OK","value":value}

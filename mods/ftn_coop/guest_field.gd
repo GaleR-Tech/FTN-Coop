@@ -5,7 +5,7 @@ extends RefCounted
 # and gate only host-authoritative simulation, separately for every field.
 const NATIVE := "res://scripts/hay/hay_field.gd"
 const GUARD := """
-var _ftn_guest_field := false
+var _ftn_guest_field: bool = load("res://mods/ftn_coop/guest_field.gd").initial_guest_mode()
 func ftn_set_guest_field(value: bool) -> void:
 	if value and not _ftn_guest_field:
 		super.settle_join()
@@ -24,7 +24,14 @@ func _relax_once(budget: int, deadline: int=0) -> Dictionary:
 """
 
 static var _installed: Dictionary = {}
+static var _initial_guest := false
 var _field: WeakRef
+
+static func set_initial_guest_mode(value: bool) -> void:
+	_initial_guest = value
+
+static func initial_guest_mode() -> bool:
+	return _initial_guest
 
 static func install(native: Script=null) -> Dictionary:
 	if native==null:

@@ -357,7 +357,9 @@ func _request(kind: String, payload: Dictionary) -> void:
 	if not result.ok: ui.show_error(result.code)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F3:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F8:
+		for action in InputMap.get_actions():
+			if event.is_action(action): return
 		if _marker_input_allowed():
 			_marker_requested = true
 			get_viewport().set_input_as_handled()

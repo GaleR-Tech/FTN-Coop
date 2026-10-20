@@ -159,6 +159,15 @@ func guest_field_checks(errors: Array[String]) -> void:
 		return
 	if load("res://tests/fixtures/render_field.gd")!=installed.value or installed.value.get_base_script()!=fixture:
 		errors.append("Resource takeover must return the registered subclass while retaining the original native base.")
+	if not driver.has_method("set_initial_guest_mode"):
+		errors.append("A replacement guest field must be guarded from its first callback, before native loading can reshape the host's pile.")
+	else:
+		driver.set_initial_guest_mode(true)
+		var loading_field: Node = installed.value.new()
+		loading_field.call("_process",0.016)
+		if loading_field.get("heights")!=PackedFloat32Array([1.0,2.0]): errors.append("Native guest loading must not reshape a saved pile before baseline application.")
+		driver.set_initial_guest_mode(false)
+		loading_field.free()
 	var field: RenderFieldBase = installed.value.new()
 	field.call("_process",0.016)
 	if field.get("heights")[0]<=1.0: errors.append("Registering the field subclass must preserve ordinary host simulation by default.")

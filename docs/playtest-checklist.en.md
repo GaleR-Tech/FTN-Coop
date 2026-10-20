@@ -2,14 +2,14 @@
 
 English · [Deutsch](playtest-checklist.md)
 
-Version 0.6.0 · Demo build 25963876 · Updated 20 October 2026.
+Version 0.6.1 · Demo build 25963876 · Updated 20 October 2026.
 Local tests with real demo processes must be assessed separately from the
 Internet verification below. No one has been contacted or invited automatically.
 
 ## First, two people
 
 - [ ] Both use the same demo build and mod version. First verify Linux/Proton locally if either uses Linux.
-- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.6.0 and restart, joining can be retried.
+- [ ] An older mod version is refused with installed/required versions and a download link; after both install 0.6.1 and restart, joining can be retried.
 - [ ] Both start through Steam with different accounts on different computers
       and Internet connections; the Steam overlay is available.
 - [ ] The host loads their own test save, creates a private session and sends an invitation.
@@ -26,7 +26,7 @@ Internet verification below. No one has been contacted or invited automatically.
 
 ## Then, four people
 
-- [ ] F3 markers from every participant appear with the chosen type and matching name/avatar colors; replacement, expiry and departure removal work.
+- [ ] F8 markers from every participant appear with the chosen type and matching name/avatar colors; replacement, expiry and departure removal work.
 - [ ] The F2 list shows the actual loading/play state and measured round-trip values; menus/text input do not place markers.
 - [ ] The host saves a gameplay preset, changes values and reapplies it; all guests follow. Restarting retains the preset, deleting it removes it.
 - [ ] After an unexpected guest disconnect, Rejoin last session waits for cleanup and loads the current host world once. Voluntary leaving hides the remembered target.
@@ -48,17 +48,17 @@ Internet verification below. No one has been contacted or invited automatically.
 Record the date, demo build, mod version, participant count, Internet connections
 and exact steps when an error occurs. Do not copy account credentials or complete
 save files into a public report. Until this checklist has been passed with real
-accounts, Internet operation remains unverified even though 0.6.0 uses the normal GitHub release label.
+accounts, Internet operation remains unverified even though 0.6.1 uses the normal GitHub release label.
 
-## Linux 0.6.0 verification
+## Linux 0.6.1 verification
 
 - [ ] Run the downloaded Linux installer on Ubuntu or Mint; check both languages and a folder with spaces.
 - [ ] Test install, update from an existing version, and removal; verify unchanged saves, other mods and original game files.
 - [ ] Start V66 through Steam Proton; verify F2, Steam overlay, invitations and world loading.
-- [ ] Test Windows-host/Linux-guest, then Linux-host/Windows-guest, with matching 0.6.0 packages.
+- [ ] Test Windows-host/Linux-guest, then Linux-host/Windows-guest, with matching 0.6.1 packages.
 - [ ] Record distribution, Python version, Proton version and result. These Linux checks have not yet been completed.
 
-## Guest controls and synchronization in 0.6.0
+## Guest controls and synchronization in 0.6.1
 
 - [ ] Sprint with Shift until stamina is depleted; release and recover. Try a personal remapping.
 - [ ] Open native B / Tab / T / Escape menus; movement stops, purchases debit the host once, and leaving cleans up the session.
@@ -68,7 +68,7 @@ accounts, Internet operation remains unverified even though 0.6.0 uses the norma
 - [ ] End hosting while a guest equips a shared tool; save and reload the host and verify the unlock remains.
 - [ ] For a Linux host crash, record Proton/distribution versions and capture a local Proton log. Review it for private information before sharing.
 
-## 0.6.0 regression checks
+## 0.6.1 regression checks
 
 - [ ] Host and guest carry hay simultaneously with separate shovels/forks; drop and throw on each side without moving the other's load.
 - [ ] Drop an empty tool; its copy stays on the ground and that player's hands remain empty until a deliberate new selection, including under Internet delay.
@@ -80,7 +80,7 @@ accounts, Internet operation remains unverified even though 0.6.0 uses the norma
 - [ ] Compare the gate countdown on host and guest after joining and after host pause/resume. Check that the guest's own profile time was not overwritten.
 - [ ] During recovery, old in-flight world events must not restart native loading. Copy a failure report and check its recovery cause before sharing.
 
-## 0.6.0 send-buffer and native-render checks
+## 0.6.1 send-buffer and native-render checks
 
 - [ ] Keep the host moving while a guest joins; the guest reaches play without another ordinary loading screen.
 - [ ] Repeat with a slow connection or about 500 ms latency; shared purchases and hay changes remain ordered.

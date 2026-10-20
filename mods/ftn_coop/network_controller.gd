@@ -51,6 +51,7 @@ var _last_build_sequence := 0
 var _equipment_epochs: Dictionary = {}
 var _pose_serial := 0
 var _last_pose_serial: Dictionary = {}
+var _queued_poses: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -104,6 +105,7 @@ func leave() -> void:
 	_tx.clear()
 	_tx_bytes = 0
 	_send_blocked.clear()
+	_queued_poses.clear()
 	_preparing.clear()
 	for record in _pending.values(): record.transfer.queue_free()
 	_pending.clear()
@@ -172,6 +174,11 @@ func _on_session_outgoing(peer: int, kind: String, body: Dictionary) -> void:
 	_queue(peer,kind,body)
 
 func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> Dictionary:
+	var stream := Vector2i(peer,int(body.get("peer",0)))
+	var now := Time.get_ticks_msec()
+	if kind=="POSE" and not reliable and _queued_poses.has(stream):
+		var previous: Dictionary = _queued_poses[stream]
+		if now-previous.at<500 and previous.body==body: return _ok()
 	if _tx.size()>=8192: return _error("SEND_LIMIT")
 	var data := body.duplicate(true)
 	if kind=="POSE":
@@ -189,6 +196,7 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 	if _tx_bytes+encoded.value.size()>256*1024*1024: return _error("SEND_LIMIT")
 	_tx.append({"peer":peer,"channel":0 if reliable else 1,"bytes":encoded.value,"reliable":reliable,"pose_actor":int(body.get("peer",0)) if not reliable else 0})
 	_tx_bytes += encoded.value.size()
+	if kind=="POSE" and not reliable: _queued_poses[stream] = {"body":body.duplicate(true),"at":now}
 	return _ok()
 
 func _process(delta: float) -> void:
@@ -235,32 +243,43 @@ func _process(delta: float) -> void:
 
 func _drain_packets(delta: float) -> void:
 	var blocked := {}
-	var index := 0
+	var destinations := {}
+	for packet in _tx: destinations[packet.peer] = true
+	var allowance := maxi(1,ceili(12.0/maxi(1,destinations.size())))
+	var peer_attempts := {}
 	var attempts := 0
 	var epoch := _epoch
-	while index<_tx.size() and attempts<12:
-		var packet: Dictionary = _tx[index]
-		if blocked.has(packet.peer):
-			index += 1
-			continue
-		attempts += 1
-		var sent: Dictionary = _transport.send(packet.peer,packet.channel,packet.bytes,packet.reliable)
-		if epoch!=_epoch: return
-		if not sent.ok and sent.code=="WOULD_BLOCK":
-			blocked[packet.peer] = true
-			_send_blocked[packet.peer] = float(_send_blocked.get(packet.peer,0.0))+delta
-			if _send_blocked[packet.peer]>=120.0:
-				_fail("TRANSFER_TIMEOUT",packet.peer if session.is_host else 0)
-				return
-			index += 1
-			continue
-		_tx_bytes -= packet.bytes.size()
-		_tx.remove_at(index)
-		_send_blocked.erase(packet.peer)
-		if not sent.ok: _fail(sent.code,packet.peer if session.is_host else 0)
-		if epoch!=_epoch: return
+	# Poses are independent, replaceable state. Deliver the newest movement
+	# before bulk data, while reliable packets retain their per-peer FIFO.
+	for reliable in [false,true]:
+		var index := 0
+		while index<_tx.size() and attempts<12:
+			var packet: Dictionary = _tx[index]
+			if packet.reliable!=reliable or (reliable and blocked.has(packet.peer)) or int(peer_attempts.get(packet.peer,0))>=allowance:
+				index += 1
+				continue
+			attempts += 1
+			peer_attempts[packet.peer] = int(peer_attempts.get(packet.peer,0))+1
+			var sent: Dictionary = _transport.send(packet.peer,packet.channel,packet.bytes,packet.reliable)
+			if epoch!=_epoch: return
+			if not sent.ok and sent.code=="WOULD_BLOCK":
+				if reliable:
+					blocked[packet.peer] = true
+					_send_blocked[packet.peer] = float(_send_blocked.get(packet.peer,0.0))+delta
+					if _send_blocked[packet.peer]>=120.0:
+						_fail("TRANSFER_TIMEOUT",packet.peer if session.is_host else 0)
+						return
+				index += 1
+				continue
+			_tx_bytes -= packet.bytes.size()
+			_tx.remove_at(index)
+			if reliable: _send_blocked.erase(packet.peer)
+			if not sent.ok: _fail(sent.code,packet.peer if session.is_host else 0)
+			if epoch!=_epoch: return
 
 func _discard_packets(peer: int) -> void:
+	for stream in _queued_poses.keys():
+		if stream.x==peer or stream.y==peer: _queued_poses.erase(stream)
 	_tx = _tx.filter(func(packet: Dictionary): return packet.peer!=peer)
 	_tx_bytes = 0
 	for packet in _tx: _tx_bytes += packet.bytes.size()
