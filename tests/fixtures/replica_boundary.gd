@@ -42,14 +42,17 @@ class LiveState extends Node:
 		money_changed.emit(data.money)
 
 class QuestPanel extends Control:
-	var shown := -1
+	var _shown := -1
+	var _hold := 0.0
+	var _farewell_left := 0.0
 	var title := Label.new()
 	var progress := Label.new()
 	func _init() -> void:
 		add_child(title)
 		add_child(progress)
 	func show_step(index: int) -> void:
-		shown = index
+		if _hold>0.0: return
+		_shown = index
 		title.text = "Fill bucket" if index==14 else "Pick up hay"
 	func show_progress(value: Dictionary) -> void: progress.text = value.get("text","")
 

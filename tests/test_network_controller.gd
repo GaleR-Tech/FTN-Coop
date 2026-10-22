@@ -180,6 +180,64 @@ func run(tree: SceneTree) -> Array[String]:
 	errors.append_array(await _fragmented_event_backpressure(tree))
 	errors.append_array(await _fair_network_traffic(tree))
 	errors.append_array(await _idle_pose_traffic(tree))
+	errors.append_array(await _shared_compressed_events(tree))
+	return errors
+
+func _shared_compressed_events(tree: SceneTree) -> Array[String]:
+	var errors: Array[String] = []
+	var wire := TrafficTransport.new()
+	var game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
+	game.tree = tree
+	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
+	for node in [wire,controller]: tree.root.add_child(node)
+	controller.configure(wire,game,"25963876","0.6.3")
+	controller.set_process(false)
+	controller.session.is_host = true
+	controller.session.session_id = "0123456789abcdef0123456789abcdef"
+	for peer in [2,3,4]:
+		controller.session.roster[peer] = {"accepted":true,"state":"playing","name":"Player"}
+		controller._connections[peer] = str(peer).repeat(32)
+	var props := []
+	for index in range(80):
+		props.append({"id":"hay_wad","state":{"strands":100},"xform":Transform3D(Basis.IDENTITY,Vector3(index,1,2))})
+	var event := {"revision":1,"kind":"native","patch":{"props":props}}
+	var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
+	var raw: Dictionary = protocol.encode({"protocol":1,"type":"EVENT","session":controller.session.session_id,"body":event})
+	controller._on_confirmed(event)
+	controller._on_confirmed({"revision":2,"patch":{"money":25}})
+	var shared_transfer := ""
+	for peer in [2,3,4]:
+		var receiver: Node = load("res://mods/ftn_coop/snapshot_transfer.gd").new()
+		receiver.configure(controller.session.session_id)
+		var completed := []
+		receiver.completed.connect(func(value: Dictionary,revision: int): completed.append({"value":value,"revision":revision}))
+		var bytes := 0
+		var revisions := []
+		for packet in controller._tx:
+			if packet.peer!=peer: continue
+			var decoded: Dictionary = protocol.decode(packet.bytes)
+			if not decoded.ok:
+				errors.append("Compressed event frames must remain valid protocol packets.")
+				continue
+			var message: Dictionary = decoded.value
+			if message.body.get("_connection")!=controller._connections[peer]: errors.append("Shared event preparation must preserve each guest's connection cookie.")
+			if message.type=="EVENT": revisions.append(message.body.revision)
+			else:
+				bytes += packet.bytes.size()
+				if message.type=="SNAPSHOT_BEGIN":
+					if shared_transfer.is_empty(): shared_transfer = message.body.transfer
+					elif shared_transfer!=message.body.transfer: errors.append("One world event must be compressed once and shared across all playing guests.")
+				var frame: Dictionary = message.body.duplicate(true)
+				frame.erase("_connection")
+				receiver.receive(1,frame)
+				if not completed.is_empty() and revisions.is_empty(): revisions.append(completed[0].revision)
+		if completed.size()!=1 or completed[0].value!={"mode":"event","event":event} or revisions!=[1,2]:
+			errors.append("A medium world event must use compressed frames and preserve the following small revision.")
+		if not raw.ok or bytes>=raw.value.size()/2: errors.append("Medium moving-world updates must avoid the old uncompressed bandwidth spike.")
+		receiver.free()
+	controller.leave()
+	for node in [controller,wire]: node.queue_free()
+	await tree.process_frame
 	return errors
 
 func _fair_network_traffic(tree: SceneTree) -> Array[String]:
@@ -189,7 +247,7 @@ func _fair_network_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.6.2")
+	controller.configure(wire,game,"25963876","0.6.3")
 	controller.set_process(false)
 	controller.pose_stream_enabled = false
 	controller.session.is_host = true
@@ -236,7 +294,7 @@ func _idle_pose_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.6.2")
+	controller.configure(wire,game,"25963876","0.6.3")
 	controller.set_process(false)
 	controller.session.is_host = true
 	controller.session.state = controller.session.State.PLAYING

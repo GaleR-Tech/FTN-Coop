@@ -3,6 +3,8 @@ extends RefCounted
 var held: Array = []
 var initialized := false
 var _records: Array = []
+var _local_peer := 0
+var _local_camera := Transform3D.IDENTITY
 
 func apply_records(manager: Node, records: Array) -> void:
 	var items: Variant = manager.get("items")
@@ -19,6 +21,16 @@ func apply_records(manager: Node, records: Array) -> void:
 		manager.call("from_array",records)
 	_records = records.duplicate(true)
 	initialized = true
+	if _local_peer>0: follow_local(manager,_local_peer,_local_camera)
+
+func accept_held(manager: Node, rows: Array) -> void:
+	var items: Variant = manager.get("items")
+	if items is Array:
+		for previous in held:
+			if previous.index<items.size() and previous.index<_records.size() and is_instance_valid(items[previous.index]):
+				items[previous.index].global_transform = _records[previous.index].xform
+	held = rows.duplicate(true)
+	if _local_peer>0: follow_local(manager,_local_peer,_local_camera)
 
 func capture_held(manager: Node, players: Dictionary) -> Array:
 	var result := []
@@ -52,6 +64,8 @@ func validate_held(rows: Variant, count: int) -> bool:
 	return true
 
 func follow_local(manager: Node, peer: int, camera: Transform3D) -> void:
+	_local_peer = peer
+	_local_camera = camera
 	var items: Variant = manager.get("items")
 	if not items is Array: return
 	for row in held:

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SetupPath) {
     & (Join-Path $projectRoot 'tools\BuildInstaller.ps1')
-    $SetupPath = Join-Path $projectRoot 'dist\FTN-Coop-0.6.2-Setup.exe'
+    $SetupPath = Join-Path $projectRoot 'dist\FTN-Coop-0.6.3-Setup.exe'
 }
 if (-not $Worker) {
     # Isolate Windows Forms and culture changes, and bound unexpected modal dialogs.

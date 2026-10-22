@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SetupPath) {
     & (Join-Path $projectRoot 'tools/BuildInstaller.ps1')
-    $SetupPath = Join-Path $projectRoot 'dist/FTN-Coop-0.6.2-Setup.exe'
+    $SetupPath = Join-Path $projectRoot 'dist/FTN-Coop-0.6.3-Setup.exe'
 }
 if (-not $Worker) {
     $logBase = Join-Path ([IO.Path]::GetTempPath()) ('ftn-installer-states-'+[guid]::NewGuid().ToString('N'))
@@ -60,7 +60,7 @@ try {
     $directory.Text = $game
     Require ((Control $form 'InstallAction').Text -eq 'Install') 'A clean demo needs an Install action.'
     Require (-not (Control $form 'RemoveAction').Enabled) 'Remove must be unavailable without a managed installation.'
-    Require ((Control $form 'TargetVersion').Text.Contains('0.6.2')) 'The package version must be visible.'
+    Require ((Control $form 'TargetVersion').Text.Contains('0.6.3')) 'The package version must be visible.'
 
     $mod = Join-Path $game 'mods/ftn_coop'
     $null = New-Item -ItemType Directory -Path $mod -Force
@@ -87,9 +87,9 @@ try {
         Require ((Control $form 'InstalledVersion').Text -eq 'Not installed') 'An entry in another section or comment must not count as an active mod.'
     }
 
-    [IO.File]::WriteAllText($manifestPath,'{"format":"FTN-Coop-1","mod_version":"0.6.2","files":[]}',[Text.UTF8Encoding]::new($false))
-    Require ((Field (Inspect $game) 'Version') -eq '0.6.2') 'New installation metadata must identify the current installed version.'
-    [IO.File]::WriteAllText($manifestPath,'{"format":"FTN-Coop-1","mod_version":"0.6.2\nPRIVATE_DATA","files":[]}',[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText($manifestPath,'{"format":"FTN-Coop-1","mod_version":"0.6.3","files":[]}',[Text.UTF8Encoding]::new($false))
+    Require ((Field (Inspect $game) 'Version') -eq '0.6.3') 'New installation metadata must identify the current installed version.'
+    [IO.File]::WriteAllText($manifestPath,'{"format":"FTN-Coop-1","mod_version":"0.6.3\nPRIVATE_DATA","files":[]}',[Text.UTF8Encoding]::new($false))
     Require ((Field (Inspect $game) 'Version') -eq '') 'Invalid version metadata must not be displayed as a version.'
     foreach ($invalid in @('{broken json','{"format":"OTHER","files":[]}',('x'*2097153))) {
         [IO.File]::WriteAllText($manifestPath,$invalid,[Text.UTF8Encoding]::new($false))

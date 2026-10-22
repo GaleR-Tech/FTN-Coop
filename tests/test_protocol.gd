@@ -1,11 +1,65 @@
 extends RefCounted
 
+func _table_checks(codec: RefCounted, errors: Array[String]) -> void:
+	var records := []
+	for index in range(120):
+		records.append({"id":"hay_wad","state":{"strands":100,"nested":[1,2]},"distance":float(index)*0.123456789,"serial":9223372036854775807-index,"xform":Transform3D(Basis(Vector3.UP,float(index)*0.17),Vector3(index,1.25,-2))})
+	var encoded: Dictionary = codec.encode(records,1024*1024)
+	var decoded: Dictionary = codec.decode(encoded.value,1024*1024)
+	if not decoded.ok or decoded.value!=records: errors.append("Columnar native records must preserve transforms, scalar precision, nested state and int64 IDs exactly.")
+	if encoded.value.size()>26000: errors.append("Repeated native records must use bounded columns instead of repeating every key and transform tag.")
+	if decoded.ok:
+		decoded.value[0].state.nested[0] = 99
+		if decoded.value[1].state.nested[0]!=1: errors.append("Repeated table values must decode into independently mutable native records.")
+	var mixed := [{"v":{"number":1}},{"v":{"number":1.0}},{"v":{"number":1}},{"v":{"number":1.0}}]
+	var mixed_wire: Dictionary = codec.encode(mixed,1024*1024)
+	var mixed_read: Dictionary = codec.decode(mixed_wire.value,1024*1024)
+	if not mixed_read.ok or typeof(mixed_read.value[0].v.number)!=TYPE_INT or typeof(mixed_read.value[1].v.number)!=TYPE_FLOAT:
+		errors.append("Equal scalar values with different native types must keep those types inside constant-looking table cells.")
+	var zeros := [{"v":0.0},{"v":-0.0},{"v":0.0},{"v":-0.0}]
+	var zero_wire: Dictionary = codec.encode(zeros,1024*1024)
+	var zero_read: Dictionary = codec.decode(zero_wire.value,1024*1024)
+	if not zero_read.ok or PackedFloat64Array([zero_read.value[0].v,zero_read.value[1].v]).to_byte_array()!=PackedFloat64Array([0.0,-0.0]).to_byte_array():
+		errors.append("Constant-looking table columns must preserve signed zero bits.")
+	var deep_table: Array = ["i","1"]
+	for index in range(17): deep_table = ["rows",[4,[[["s","v"],["one",deep_table]]]]]
+	if codec.decode(JSON.stringify(deep_table).to_utf8_buffer(),1024*1024).ok: errors.append("Compact tables must enforce the depth of their expanded native records.")
+	var empty_table: Array = ["rows",[4,[]]]
+	var deep_records: Array = [{},{},{},{}]
+	for index in range(32):
+		empty_table = ["a",[empty_table]]
+		deep_records = [deep_records]
+	if codec.decode(JSON.stringify(empty_table).to_utf8_buffer(),1024*1024).ok or codec.encode(deep_records,1024*1024).ok:
+		errors.append("Even an empty table row must count its dictionary level toward the logical depth limit.")
+	var packed_rows := []
+	for index in range(4): packed_rows.append({"direct":PackedByteArray([1,2]),"nested":{"bytes":PackedInt32Array([1,2])}})
+	var packed_wire: Dictionary = codec.encode(packed_rows,1024*1024)
+	var packed_read: Dictionary = codec.decode(packed_wire.value,1024*1024)
+	if packed_read.ok:
+		packed_read.value[0].direct[0] = 99
+		packed_read.value[0].nested.bytes[0] = 99
+		if packed_read.value[1].direct[0]!=1 or packed_read.value[1].nested.bytes[0]!=1: errors.append("Repeated packed arrays must remain independently mutable, including nested native state.")
+	var huge := PackedByteArray()
+	huge.resize(700000)
+	var expansion := ["rows",[4,[[["s","v"],["one",["u8",Marshalls.raw_to_base64(huge)]]]]]]
+	if codec.decode(JSON.stringify(expansion).to_utf8_buffer(),1024*1024).ok: errors.append("Constant cells must charge their expanded payload against the decode budget before copying.")
+	var invalid := [
+		["rows",[2000001,[]]],
+		["rows",[4,[[["s","x"],["many",["a",[["i","1"]]]]]]]],
+		["rows",[4,[[["s","x"],["one",["i","1"]]],[["s","x"],["one",["i","2"]]]]]],
+		["rows",[4,[[["s","x"],["xforms",["f64",""]]]]]],
+		["rows",[4,[[["s","x"],["one",["object",1]]]]]],
+	]
+	for value in invalid:
+		if codec.decode(JSON.stringify(value).to_utf8_buffer(),1024*1024).ok: errors.append("Malformed table dimensions, columns, duplicate keys and object tags must fail before native use.")
+
 func run(_tree: SceneTree) -> Array[String]:
 	if not FileAccess.file_exists("res://mods/ftn_coop/protocol.gd"):
 		return ["Validated network protocol is not implemented yet."]
 	var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
 	var errors: Array[String] = []
 	var codec: RefCounted = load("res://mods/ftn_coop/value_codec.gd").new()
+	_table_checks(codec,errors)
 	for scalar in [13762253.93678915,14.5727403333333,0.1,-0.0,1.0e-200,1.0e200]:
 		var packed: Dictionary = codec.encode(scalar,1024)
 		var unpacked: Dictionary = codec.decode(packed.value,1024)

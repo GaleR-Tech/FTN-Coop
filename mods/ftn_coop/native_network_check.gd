@@ -105,12 +105,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.6.2")
+		_runtime.configure(_adapter,transport,"25963876","0.6.3")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.6.2")
+		_network.configure(transport,_adapter,"25963876","0.6.3")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
@@ -431,9 +431,15 @@ func _check_belt_replacement() -> bool:
 func _check_guest_load_visuals() -> void:
 	var peer: int = _network._transport.local_peer_id()
 	var load_state: Dictionary = _adapter._tool_loads().selected(peer,1)
-	if load_state.is_empty(): return
-	if load_state.count<=0:
-		if _checks.get("tool_load_received",false): _checks.tool_load_emptied = true
+	if load_state.is_empty() or load_state.count<=0:
+		if _checks.get("tool_load_received",false):
+			# The departure scenario removes the controlled actor. Its whole load
+			# row then disappears rather than publishing a final zero-count row.
+			var local_load: Dictionary = _adapter.read_local_tool_load()
+			_runtime.ui.set_tool_load(local_load)
+			_runtime.ui._process(0.0)
+			_checks.tool_load_emptied = (local_load.is_empty() and not _runtime.ui._tool_feedback.visible) or (not local_load.is_empty() and local_load.count==0)
+			_checks.tool_load_end = "actor_removed" if load_state.is_empty() else "zero_count"
 		return
 	_checks.tool_load_received = true
 	_adapter.select_local_tool(1)

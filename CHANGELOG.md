@@ -1,5 +1,23 @@
 # Changelog / Änderungen
 
+## 0.6.3 · 2026-10-22
+
+### English
+
+- Larger live events use compression from 2 KiB upward. The host prepares the compressed event once for all playing guests, preserving connection checks and reliable revision order.
+- A bounded column format avoids repeating native record keys, constant values and transform tags. Numeric types, float64 precision and independently mutable records are retained. Expanded-size and depth checks reject malformed or excessive data.
+- Native hand-held straw now has an owning peer and follows that guest's local camera. New host poses preserve locally held straw and props; confirmed releases restore their authoritative world positions.
+- Guest quest displays clear an obsolete native completion hold before showing the host's current lesson. A stale main panel is retried even when the quest index has not changed.
+- Install 0.6.3 on every participant and restart the demo. Controlled transfer and native-game tests do not establish the Internet ping of the affected saved world; Linux/Proton crashes and the reported pile appearance still require affected-system testing.
+
+### Deutsch
+
+- Größere laufende Änderungen werden ab 2 KiB komprimiert. Der Host bereitet die komprimierte Änderung einmal für alle spielenden Gäste auf. Verbindungsprüfung und Reihenfolge zuverlässiger Änderungen bleiben erhalten.
+- Ein begrenztes Spaltenformat vermeidet wiederholte native Datensatzschlüssel, konstante Werte und Transformationsmarkierungen. Zahlentypen, Float64-Genauigkeit und unabhängig veränderbare Datensätze bleiben erhalten. Größen- und Tiefenprüfungen weisen fehlerhafte oder übermäßige Daten ab.
+- Heu in der normalen Hand erhält eine Spielerzuordnung und folgt der lokalen Gastkamera. Neue Hostpositionen erhalten die lokale Darstellung getragenen Heus und getragener Gegenstände; nach bestätigtem Loslassen gilt wieder die Weltposition des Hosts.
+- Die Gast-Questanzeige löst eine veraltete native Abschlussanzeige, bevor sie den aktuellen Host-Schritt zeigt. Ein veraltetes Hauptpanel wird auch bei unverändertem Questindex erneut aktualisiert.
+- Alle müssen 0.6.3 installieren und die Demo neu starten. Kontrollierte Übertragungs- und Spieltests belegen noch keinen bestimmten Internet-Ping im betroffenen Spielstand. Linux-/Proton-Abstürze und die gemeldete Haufendarstellung brauchen weiterhin Tests auf den betroffenen Systemen.
+
 ## 0.6.2 · 2026-10-22
 
 ### English

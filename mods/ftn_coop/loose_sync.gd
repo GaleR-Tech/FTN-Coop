@@ -11,12 +11,21 @@ var _native_mesh: Mesh
 var _native_material: Material
 var held: Array = []
 var _draw_slots: Dictionary = {}
+var _local_peer := 0
+var _local_player: WeakRef
 
 func capture_holds(players: Dictionary) -> Array:
 	var rows := []
 	for peer in players:
 		var player: Node = players[peer]
 		if not is_instance_valid(player): continue
+		var hand: Variant = player.get("hand")
+		var camera: Variant = player.get("camera")
+		if hand is Node and hand.has_method("held_bodies") and camera is Node3D:
+			var frame: Transform3D = camera.global_transform.affine_inverse()
+			for body in hand.call("held_bodies"):
+				if is_instance_valid(body) and body is Node3D and _ids.has(body):
+					rows.append({"id":_ids[body],"peer":int(peer),"tool":0,"offset":frame*body.global_transform})
 		for role in ["shovel","pitchfork"]:
 			var tool: Variant = player.get(role)
 			if not tool is Node or not tool.get("_riding") is Dictionary or not tool.get("body") is Node3D: continue
@@ -34,7 +43,7 @@ func validate_holds(rows: Variant, ids: PackedInt32Array) -> bool:
 	var previous := 0
 	for row in rows:
 		if not row is Dictionary or row.size()!=4 or typeof(row.get("id"))!=TYPE_INT or row.id<=previous or not known.has(row.id): return false
-		if typeof(row.get("peer"))!=TYPE_INT or row.peer<1 or row.peer>2147483647 or typeof(row.get("tool"))!=TYPE_INT or row.tool not in [1,2] or not row.get("offset") is Transform3D: return false
+		if typeof(row.get("peer"))!=TYPE_INT or row.peer<1 or row.peer>2147483647 or typeof(row.get("tool"))!=TYPE_INT or row.tool not in [0,1,2] or not row.get("offset") is Transform3D: return false
 		previous = row.id
 		var offset: Transform3D = row.offset
 		if not offset.origin.is_finite() or offset.origin.length()>32.0: return false
@@ -44,13 +53,21 @@ func validate_holds(rows: Variant, ids: PackedInt32Array) -> bool:
 
 func follow_local(peer: int, player: Node) -> void:
 	if not is_instance_valid(player): return
+	_local_peer = peer
+	_local_player = weakref(player)
 	for row in held:
 		if row.peer!=peer or not _draw_slots.has(row.id): continue
-		var tool: Variant = player.get("shovel" if row.tool==1 else "pitchfork")
-		if not tool is Node or not tool.get("body") is Node3D: continue
+		var anchor: Variant = player.get("camera")
+		if row.tool!=0:
+			var tool: Variant = player.get("shovel" if row.tool==1 else "pitchfork")
+			anchor = tool.get("body") if tool is Node else null
+		if not anchor is Node3D: continue
 		var slot: Dictionary = _draw_slots[row.id]
 		var batch: MultiMesh = _hay if slot.kind==0 else _needles
-		batch.set_instance_transform(slot.index,tool.get("body").global_transform*row.offset)
+		batch.set_instance_transform(slot.index,anchor.global_transform*row.offset)
+
+func _refresh_local() -> void:
+	if _local_player!=null and is_instance_valid(_local_player.get_ref()): follow_local(_local_peer,_local_player.get_ref())
 
 func accept_holds(rows: Array) -> bool:
 	if not validate_holds(rows,current.ids): return false
@@ -63,6 +80,7 @@ func accept_holds(rows: Array) -> bool:
 		var batch: MultiMesh = _hay if slot.kind==0 else _needles
 		batch.set_instance_transform(slot.index,_transform(current.poses,offsets[previous.id]))
 	held = rows.duplicate(true)
+	_refresh_local()
 	return true
 
 func use_native_visuals(source: Node) -> void:
@@ -206,6 +224,7 @@ func apply_delta(delta: Dictionary, parent: Node) -> Dictionary:
 			batch.set_instance_transform(slot.index,_transform(updates.poses,index))
 			batch.set_instance_color(slot.index,data.colors[at])
 		current = data
+		_refresh_local()
 		return _ok()
 	var merged := merge_delta(delta)
 	return apply(merged.value,parent) if merged.ok else merged
@@ -258,6 +277,7 @@ func apply(data: Dictionary, parent: Node) -> Dictionary:
 			_needles.set_instance_transform(next_needle,transform)
 			next_needle += 1
 	current = data.duplicate(true)
+	_refresh_local()
 	return _ok()
 
 func _create_visuals(parent: Node) -> void:
@@ -298,6 +318,8 @@ func close() -> void:
 	_root = null
 	_ids.clear()
 	held.clear()
+	_local_peer = 0
+	_local_player = null
 	_draw_slots.clear()
 	_native_mesh = null
 	_native_material = null

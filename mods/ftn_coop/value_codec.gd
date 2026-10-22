@@ -46,6 +46,7 @@ func _pack(value: Variant, depth: int) -> Variant:
 			return ["f", _base64(PackedFloat64Array([value]).to_byte_array())]
 		TYPE_STRING, TYPE_STRING_NAME: return ["s", String(value)]
 		TYPE_ARRAY:
+			if _table_eligible(value): return _pack_table(value,depth)
 			var array := []
 			for item in value: array.append(_pack(item, depth + 1))
 			return ["a", array]
@@ -84,6 +85,7 @@ func _unpack(data: Variant, depth: int) -> Variant:
 	var tag: String = data[0]
 	var body: Variant = data[1]
 	match tag:
+		"rows": return _unpack_table(body,depth)
 		"n":
 			if body != null: _valid = false
 			return null
@@ -182,6 +184,170 @@ func _unpack(data: Variant, depth: int) -> Variant:
 				return Transform3D(array[0],array[1])
 	_valid = false
 	return null
+
+func _table_eligible(rows: Array) -> bool:
+	if rows.size()<4 or not rows[0] is Dictionary: return false
+	var keys: Array = rows[0].keys()
+	for row in rows:
+		if not row is Dictionary or row.size()!=keys.size(): return false
+		for key in keys:
+			if not row.has(key): return false
+	return true
+
+func _pack_table(rows: Array, depth: int) -> Variant:
+	if depth+1>MAX_DEPTH:
+		_valid = false
+		return null
+	var columns := []
+	_remaining -= rows.size()*(1+2*rows[0].size())
+	if _remaining<0:
+		_valid = false
+		return null
+	for key in rows[0]:
+		if typeof(key) not in [TYPE_STRING,TYPE_STRING_NAME,TYPE_INT]: _valid = false
+		var values := []
+		var same := true
+		var kind: int = typeof(rows[0][key])
+		var uniform := true
+		for row in rows:
+			values.append(row[key])
+			same = same and _same_cell(row[key],rows[0][key],depth+2)
+			uniform = uniform and typeof(row[key])==kind
+		var column: Array
+		if same:
+			_remaining -= (rows.size()-1)*_expanded_cost(values[0],int(_remaining/(rows.size()-1)),depth+2)
+			if _remaining<0: _valid = false
+			column = ["one",_pack(values[0],depth+2)]
+		elif uniform and kind in [TYPE_INT,TYPE_FLOAT]:
+			if kind==TYPE_FLOAT:
+				for value in values:
+					if not is_finite(value): _valid = false
+			column = ["many",_pack(PackedInt64Array(values) if kind==TYPE_INT else PackedFloat64Array(values),depth+1)]
+		elif uniform and kind==TYPE_TRANSFORM3D:
+			var components := PackedFloat64Array()
+			for value in values:
+				for vector in [value.basis.x,value.basis.y,value.basis.z,value.origin]:
+					if not vector.is_finite(): _valid = false
+					components.append_array(PackedFloat64Array([vector.x,vector.y,vector.z]))
+			column = ["xforms",_pack(components,depth+2)]
+		else: column = ["many",_pack(values,depth+1)]
+		columns.append([_pack(key,depth+2),column])
+	return ["rows",[rows.size(),columns]]
+
+func _unpack_table(body: Variant, depth: int) -> Variant:
+	if depth+1>MAX_DEPTH:
+		_valid = false
+		return null
+	if not body is Array or body.size()!=2 or typeof(body[0])!=TYPE_FLOAT or not body[1] is Array:
+		_valid = false
+		return null
+	if body[0]<4 or body[0]>2000000:
+		_valid = false
+		return null
+	var count: int = int(body[0])
+	var columns: Array = body[1]
+	if body[0]!=float(count) or count<4 or count>2000000 or columns.size()>131072:
+		_valid = false
+		return null
+	_remaining -= count*(1+2*columns.size())
+	if _remaining<0:
+		_valid = false
+		return null
+	# Validate columns before allocating the expanded record array.
+	var data := {}
+	for entry in columns:
+		if not entry is Array or entry.size()!=2 or not entry[1] is Array or entry[1].size()!=2 or not entry[1][0] is String:
+			_valid = false
+			return null
+		var key: Variant = _unpack(entry[0],depth+2)
+		if not _valid or typeof(key) not in [TYPE_STRING,TYPE_INT] or data.has(key):
+			_valid = false
+			return null
+		var values: Variant = _unpack(entry[1][1],depth+1 if entry[1][0]=="many" else depth+2)
+		if not _valid: return null
+		match entry[1][0]:
+			"one":
+				_remaining -= (count-1)*_expanded_cost(values,int(_remaining/(count-1)),depth+2)
+				if _remaining<0:
+					_valid = false
+					return null
+				data[key] = {"one":values}
+			"many":
+				if typeof(values) not in [TYPE_ARRAY,TYPE_PACKED_INT64_ARRAY,TYPE_PACKED_FLOAT64_ARRAY] or values.size()!=count:
+					_valid = false
+					return null
+				if values is PackedFloat64Array:
+					for value in values:
+						if not is_finite(value): _valid = false
+				data[key] = {"many":values}
+			"xforms":
+				if not values is PackedFloat64Array or values.size()!=count*12:
+					_valid = false
+					return null
+				for value in values:
+					if not is_finite(value): _valid = false
+				data[key] = {"xforms":values}
+			_:
+				_valid = false
+				return null
+	if not _valid: return null
+	var rows := []
+	for index in range(count):
+		var row := {}
+		for key in data:
+			var column: Dictionary = data[key]
+			if column.has("one"):
+				var value: Variant = column.one
+				row[key] = _copy_cell(value)
+			elif column.has("many"): row[key] = column.many[index]
+			else:
+				var p: PackedFloat64Array = column.xforms
+				var at := index*12
+				row[key] = Transform3D(Basis(Vector3(p[at],p[at+1],p[at+2]),Vector3(p[at+3],p[at+4],p[at+5]),Vector3(p[at+6],p[at+7],p[at+8])),Vector3(p[at+9],p[at+10],p[at+11]))
+		rows.append(row)
+	return rows
+
+func _same_cell(a: Variant, b: Variant, depth: int) -> bool:
+	if depth>MAX_DEPTH or typeof(a)!=typeof(b) or a!=b: return false
+	if a is Array:
+		for index in range(a.size()):
+			if not _same_cell(a[index],b[index],depth+1): return false
+	elif a is Dictionary:
+		for key in a:
+			if not b.has(key) or not _same_cell(a[key],b[key],depth+1): return false
+	elif typeof(a) in [TYPE_FLOAT,TYPE_VECTOR2,TYPE_VECTOR3,TYPE_VECTOR4,TYPE_COLOR,TYPE_BASIS,TYPE_TRANSFORM3D,TYPE_PACKED_FLOAT32_ARRAY,TYPE_PACKED_FLOAT64_ARRAY,TYPE_PACKED_VECTOR2_ARRAY,TYPE_PACKED_VECTOR3_ARRAY,TYPE_PACKED_VECTOR4_ARRAY,TYPE_PACKED_COLOR_ARRAY]:
+		# Comparison only; no Variant/object deserializer is used.
+		return var_to_bytes(a)==var_to_bytes(b)
+	return true
+
+func _expanded_cost(value: Variant, budget: int, depth: int) -> int:
+	if depth>MAX_DEPTH or budget<1: return budget+1
+	var cost := 1
+	if value is Array or value is Dictionary:
+		for key in value:
+			if value is Dictionary: cost += _expanded_cost(key,budget-cost,depth+1)
+			cost += _expanded_cost(value[key] if value is Dictionary else key,budget-cost,depth+1)
+			if cost>budget: return cost
+	elif typeof(value) in [TYPE_PACKED_BYTE_ARRAY,TYPE_PACKED_INT32_ARRAY,TYPE_PACKED_INT64_ARRAY,TYPE_PACKED_FLOAT32_ARRAY,TYPE_PACKED_FLOAT64_ARRAY,TYPE_PACKED_STRING_ARRAY,TYPE_PACKED_VECTOR2_ARRAY,TYPE_PACKED_VECTOR3_ARRAY,TYPE_PACKED_VECTOR4_ARRAY,TYPE_PACKED_COLOR_ARRAY]:
+		cost += value.size()
+		if value is PackedStringArray:
+			for text in value:
+				cost += ceili(float(text.length())/16.0)
+				if cost>budget: return cost
+	elif value is String or value is StringName: cost += ceili(float(String(value).length())/16.0)
+	return cost
+
+func _copy_cell(value: Variant) -> Variant:
+	if value is Array:
+		var copy := []
+		for item in value: copy.append(_copy_cell(item))
+		return copy
+	if value is Dictionary:
+		var copy := {}
+		for key in value: copy[key] = _copy_cell(value[key])
+		return copy
+	if typeof(value) in [TYPE_PACKED_BYTE_ARRAY,TYPE_PACKED_INT32_ARRAY,TYPE_PACKED_INT64_ARRAY,TYPE_PACKED_FLOAT32_ARRAY,TYPE_PACKED_FLOAT64_ARRAY,TYPE_PACKED_STRING_ARRAY,TYPE_PACKED_VECTOR2_ARRAY,TYPE_PACKED_VECTOR3_ARRAY,TYPE_PACKED_VECTOR4_ARRAY,TYPE_PACKED_COLOR_ARRAY]: return value.duplicate()
+	return value
 
 func _base64_valid(value: String) -> bool:
 	if value.length() % 4 != 0: return false

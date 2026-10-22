@@ -410,8 +410,15 @@ func live_state_checks(errors: Array[String]) -> void:
 		errors.append("A money-only update must preserve the collection UI instead of rebuilding it.")
 	changed.mission_index = 14
 	changed.mission_id = "fill_bucket"
-	if not adapter.apply_confirmed_event({"patch":{"state":changed}}).ok or world.quests.title.text!="Fill bucket" or world.mission_cue.shown!=14 or world.quests.progress.text!="50% full":
+	world.quests._hold = 0.75
+	world.quests._farewell_left = 1.0
+	if not adapter.apply_confirmed_event({"patch":{"state":changed}}).ok or world.quests.title.text!="Fill bucket" or world.mission_cue._shown!=14 or world.quests.progress.text!="50% full":
 		errors.append("A host quest advance must refresh both native guest quest displays and their progress.")
+	world.quests._shown = 1
+	world.quests._hold = 0.75
+	adapter.apply_confirmed_event({"patch":{"state":changed}})
+	if world.quests._shown!=14 or world.quests._hold>0.0:
+		errors.append("A frozen completion hold must not keep an obsolete guest quest after repeated host updates.")
 	if not adapter.apply_confirmed_event({"patch":{"quest":{"index":14,"progress":{"have":3.0,"need":5.0,"text":"3 / 5"}}}}).ok or world.quests.progress.text!="3 / 5" or world.mission_cue.progress.text!="3 / 5":
 		errors.append("Quest progress must come from the host, including a progress-only update.")
 	var invalid := {"state":changed.duplicate(true),"quest":{"index":14,"progress":{"have":3.0,"need":5.0,"text":["bad"]}}}

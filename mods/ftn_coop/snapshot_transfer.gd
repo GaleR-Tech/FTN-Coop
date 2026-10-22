@@ -28,7 +28,12 @@ func begin(state: Dictionary, id: String, revision: int) -> Dictionary:
 	if not _protocol().valid_id(id) or revision < 0: return _error("INVALID_PAYLOAD")
 	var encoded: Dictionary = _codec().encode(state, MAX_RAW)
 	if not encoded.ok: return _error("WORLD_TOO_LARGE" if encoded.code == "PAYLOAD_TOO_LARGE" else encoded.code)
-	var raw: PackedByteArray = encoded.value
+	return begin_encoded(encoded.value,id,revision)
+
+# Internal callers may reuse bytes already validated by value_codec.encode.
+func begin_encoded(raw: PackedByteArray, id: String, revision: int) -> Dictionary:
+	if not _protocol().valid_id(id) or revision < 0 or raw.is_empty(): return _error("INVALID_PAYLOAD")
+	if raw.size()>MAX_RAW: return _error("WORLD_TOO_LARGE")
 	var packed := raw.compress(FileAccess.COMPRESSION_ZSTD)
 	if packed.is_empty() or packed.size() > MAX_PACKED: return _error("WORLD_TOO_LARGE")
 	var transfer_id := Crypto.new().generate_random_bytes(16).hex_encode()

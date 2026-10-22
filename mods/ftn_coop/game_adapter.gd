@@ -970,7 +970,7 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		nodes.builds.set("restore_slice_usec",slice)
 	if patch.has("props"):
 		_prop_module().apply_records(nodes.props,patch.props)
-	if patch.has("held_props"): _prop_module().held = patch.held_props.duplicate(true)
+	if patch.has("held_props"): _prop_module().accept_held(nodes.props,patch.held_props)
 	if patch.has("belts"):
 		_guest_belts = patch.belts.duplicate(true)
 		_guest_belts_ready = true
@@ -1043,11 +1043,18 @@ func _refresh_guest_quests(authoritative: Dictionary) -> void:
 	var world: Node = nodes.world
 	var panels := [world.get("quests"),world.get("mission_cue")]
 	var index: int = authoritative.mission_index
-	if world.get_instance_id()!=_quest_world_id or index!=_quest_index:
-		_quest_world_id = world.get_instance_id()
-		_quest_index = index
-		for panel in panels:
-			if panel is Node and panel.has_method("show_step"): panel.call("show_step",index)
+	var changed := world.get_instance_id()!=_quest_world_id or index!=_quest_index
+	for panel in panels:
+		if not panel is Node or not panel.has_method("show_step"): continue
+		var stale: bool = panel==panels[0] and typeof(panel.get("_shown"))==TYPE_INT and panel.get("_shown")!=index
+		if not changed and not stale: continue
+		# Native completion timers cannot expire while guest simulation is disabled.
+		# Replace their obsolete display with the host's current lesson.
+		for timer in ["_hold","_farewell_left"]:
+			if typeof(panel.get(timer))==TYPE_FLOAT: panel.set(timer,0.0)
+		panel.call("show_step",index)
+	_quest_world_id = world.get_instance_id()
+	_quest_index = index
 	var director: Node = world.get("missions")
 	var id: String = authoritative.get("mission_id","")
 	if director==null or not director.has_method("progress_of") or id.is_empty(): return
@@ -1158,14 +1165,17 @@ func _patch_valid(patch: Dictionary) -> bool:
 	var codec: RefCounted = load(MODULE_DIR+"/value_codec.gd").new()
 	return codec.encode(patch,64*1024*1024).ok
 
-func _safe_native_data(value: Variant, depth: int) -> bool:
+func _safe_native_data(value: Variant, depth: int, checked_strings: Dictionary={}) -> bool:
 	if depth > 32: return false
+	if depth==0: checked_strings = {}
 	match typeof(value):
 		TYPE_STRING, TYPE_STRING_NAME:
 			var text := String(value).to_lower()
+			if checked_strings.has(text): return true
 			if text.contains("/") or text.contains("\\") or text.begins_with("..") or (text.length()>1 and text[1]==":"): return false
 			for suffix in [".gd",".tscn",".tres",".res",".pck"]:
 				if text.ends_with(suffix): return false
+			if checked_strings.size()<4096: checked_strings[text] = true
 		TYPE_FLOAT: return is_finite(value)
 		TYPE_VECTOR2, TYPE_VECTOR3, TYPE_VECTOR4: return value.is_finite()
 		TYPE_TRANSFORM3D: return value.origin.is_finite() and value.basis.x.is_finite() and value.basis.y.is_finite() and value.basis.z.is_finite()
@@ -1174,11 +1184,11 @@ func _safe_native_data(value: Variant, depth: int) -> bool:
 		TYPE_DICTIONARY:
 			if value.size()>131072: return false
 			for key in value:
-				if not _safe_native_data(key,depth+1) or not _safe_native_data(value[key],depth+1): return false
+				if not _safe_native_data(key,depth+1,checked_strings) or not _safe_native_data(value[key],depth+1,checked_strings): return false
 		TYPE_ARRAY, TYPE_PACKED_STRING_ARRAY, TYPE_PACKED_FLOAT32_ARRAY, TYPE_PACKED_FLOAT64_ARRAY, TYPE_PACKED_VECTOR2_ARRAY, TYPE_PACKED_VECTOR3_ARRAY, TYPE_PACKED_VECTOR4_ARRAY, TYPE_PACKED_COLOR_ARRAY:
 			if value.size()>2097152: return false
 			for item in value:
-				if not _safe_native_data(item,depth+1): return false
+				if not _safe_native_data(item,depth+1,checked_strings): return false
 		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_VECTOR2I, TYPE_VECTOR3I, TYPE_PACKED_BYTE_ARRAY, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_INT64_ARRAY: pass
 		_: return false
 	return true

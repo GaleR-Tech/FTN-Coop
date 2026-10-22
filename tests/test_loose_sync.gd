@@ -14,12 +14,20 @@ class HeldTool extends Node:
 	var _riding: Dictionary = {}
 	func _init() -> void: add_child(body)
 
+class Hand extends Node:
+	var bodies: Array = []
+	func held_bodies() -> Array: return bodies
+
 class Holder extends Node3D:
 	var shovel := HeldTool.new()
 	var pitchfork := HeldTool.new()
+	var hand := Hand.new()
+	var camera := Camera3D.new()
 	func _init() -> void:
 		add_child(shovel)
 		add_child(pitchfork)
+		add_child(hand)
+		add_child(camera)
 
 func run(tree: SceneTree) -> Array[String]:
 	if not FileAccess.file_exists("res://mods/ftn_coop/loose_sync.gd"):
@@ -65,6 +73,11 @@ func run(tree: SceneTree) -> Array[String]:
 			errors.append("Local tool motion must not rewrite the authoritative loose snapshot.")
 		guest.follow_local(3,holder)
 		if not guest.validate_holds(holds,first.value.ids): errors.append("Native held straw offsets must validate against the received pool.")
+		holder.shovel._riding.clear()
+		holder.hand.bodies = [hay_a]
+		var hand_holds: Array = host.capture_holds({2:holder})
+		if hand_holds.size()!=1 or hand_holds[0].id!=original_ids[0] or hand_holds[0].tool!=0 or not guest.validate_holds(hand_holds,first.value.ids):
+			errors.append("Straw in the native hand must follow its owner's camera using the same stable loose ID.")
 		var bad_holds := holds.duplicate(true)
 		bad_holds[0].id = 99999
 		if guest.validate_holds(bad_holds,first.value.ids): errors.append("Held visuals cannot refer to a missing straw ID.")

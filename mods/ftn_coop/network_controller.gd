@@ -8,6 +8,8 @@ signal load_progress(stage: String, received_bytes: int, total_bytes: int)
 signal markers_changed(rows: Array)
 signal player_status_changed(rows: Dictionary)
 
+const COMPRESS_EVENT_BYTES := 2048
+
 var session: Node
 var world_sync: Node
 var connection_id := ""
@@ -527,26 +529,35 @@ func _finish_world(peer: int, body: Dictionary) -> void:
 	_publish_collaboration()
 
 func _on_confirmed(event: Dictionary) -> void:
+	var prepared := {}
 	for peer in session.roster.keys():
 		if peer==1 or not session.roster.has(peer) or not session.roster[peer].accepted: continue
 		if _pending.has(peer):
 			var buffered: Dictionary = _pending[peer].transfer.buffer_event(event)
 			if not buffered.ok: _fail(buffered.code,peer)
-		elif session.roster[peer].state=="playing": _queue_event(peer,event)
+		elif session.roster[peer].state=="playing":
+			if prepared.is_empty(): prepared = _prepare_event(event)
+			_queue_event(peer,event,prepared)
 
-func _queue_event(peer: int, event: Dictionary) -> void:
-	var queued := _queue(peer,"EVENT",event)
-	if queued.ok: return
-	if queued.code!="PAYLOAD_TOO_LARGE":
-		_fail(queued.code,peer)
-		return
+func _prepare_event(event: Dictionary) -> Dictionary:
+	var encoded: Dictionary = load(get_script().resource_path.get_base_dir()+"/value_codec.gd").new().encode({"mode":"event","event":event},256*1024*1024)
+	if not encoded.ok: return encoded
+	if encoded.value.size()<COMPRESS_EVENT_BYTES: return _ok([])
 	var transfer: Node = load(get_script().resource_path.get_base_dir()+"/snapshot_transfer.gd").new()
-	var begun: Dictionary = transfer.begin({"mode":"event","event":event},session.session_id,event.revision)
+	var begun: Dictionary = transfer.begin_encoded(encoded.value,session.session_id,event.revision)
 	transfer.free()
-	if not begun.ok:
-		_fail(begun.code,peer)
+	return _ok(begun.value.frames) if begun.ok else begun
+
+func _queue_event(peer: int, event: Dictionary, prepared: Dictionary={}) -> void:
+	if prepared.is_empty(): prepared = _prepare_event(event)
+	if not prepared.ok:
+		_fail(prepared.code,peer)
 		return
-	for packet in begun.value.frames:
+	if prepared.value.is_empty():
+		var queued := _queue(peer,"EVENT",event)
+		if not queued.ok: _fail(queued.code,peer)
+		return
+	for packet in prepared.value:
 		var queued_packet: Dictionary = _queue(peer,packet.kind,packet)
 		if not queued_packet.ok:
 			_fail(queued_packet.code,peer)
@@ -675,5 +686,5 @@ func _exit_tree() -> void:
 	if _adapter!=null and _adapter.has_method("restore_shared_settings"):
 		_adapter.restore_shared_settings()
 
-func _ok() -> Dictionary: return {"ok":true,"code":"OK","value":null}
+func _ok(value: Variant=null) -> Dictionary: return {"ok":true,"code":"OK","value":value}
 func _error(code: String) -> Dictionary: return {"ok":false,"code":code,"value":null}

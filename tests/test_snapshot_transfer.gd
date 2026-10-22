@@ -23,6 +23,14 @@ func run(_tree: SceneTree) -> Array[String]:
 		receiver.free()
 		return ["Valid world failed to start a transfer."]
 	var frames: Array = begun.value.frames
+	var encoded: Dictionary = load("res://mods/ftn_coop/value_codec.gd").new().encode(state,256*1024*1024)
+	if sender.has_method("begin_encoded"):
+		var shared: Dictionary = sender.begin_encoded(encoded.value,SESSION,10)
+		if not shared.ok or shared.value.frames[0].sha256!=frames[0].sha256 or shared.value.frames[0].raw_bytes!=encoded.value.size():
+			errors.append("Reusing encoded world data must preserve the exact compressed contents and bounds.")
+		if sender.begin_encoded(PackedByteArray(),SESSION,10).code!="INVALID_PAYLOAD" or sender.begin_encoded(encoded.value,"bad",10).code!="INVALID_PAYLOAD":
+			errors.append("Pre-encoded transfers must validate empty data and session identity before compression.")
+	else: errors.append("World event broadcasts need a bounded transfer entry point for shared encoded bytes.")
 	var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
 	for frame in frames:
 		var packet: Dictionary = protocol.encode({"protocol":1,"session":SESSION,"type":frame.kind,"body":frame})

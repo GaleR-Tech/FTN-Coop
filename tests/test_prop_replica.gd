@@ -51,8 +51,16 @@ func run(tree: SceneTree) -> Array[String]:
 	if original.global_position!=Vector3(14,2,3): errors.append("A guest's carried prop must follow its local camera between network updates.")
 	module.follow_local(props,3,Transform3D.IDENTITY)
 	if original.global_position!=Vector3(14,2,3): errors.append("Local rendering must not move another peer's carried item.")
+	module.follow_local(props,2,camera)
 	var view: Array = module.authoritative_view(props)
 	if view.size()!=1 or view[0].xform.origin!=Vector3(4,2,3): errors.append("Prediction must preserve the last authoritative transform for shared-state comparisons.")
+	records[0].xform.origin = Vector3(5,2,3)
+	module.apply_records(props,records)
+	if original.global_position!=Vector3(14,2,3): errors.append("Incoming host poses must not snap a locally held prop back behind its camera.")
+	if module.has_method("accept_held"):
+		module.accept_held(props,[])
+		if original.global_position!=Vector3(5,2,3): errors.append("An authoritative release must restore the latest world pose immediately.")
+	else: errors.append("Held prop ownership needs an explicit release that restores the authoritative world pose.")
 	if module.validate_held([{"index":1,"peer":2,"offset":Transform3D.IDENTITY}],1): errors.append("Held metadata must not refer to an absent prop.")
 	records[0].state.stored = 3
 	module.apply_records(props,records)
