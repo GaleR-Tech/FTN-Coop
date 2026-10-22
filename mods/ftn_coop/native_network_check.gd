@@ -86,6 +86,7 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 		_adapter.nodes.state.set("money",price)
 	else:
 		_adapter.set_guest_mode(true)
+		if _presence_check and not await _check_belt_replacement(): return _finish("BELT_REPLACEMENT_FAILED")
 		var before: Dictionary = _adapter.nodes.state.call("to_dict").duplicate(true)
 		_adapter.nodes.state.call("from_dict",before)
 		var after: Dictionary = _adapter.nodes.state.call("to_dict")
@@ -104,12 +105,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.6.1")
+		_runtime.configure(_adapter,transport,"25963876","0.6.2")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.6.1")
+		_network.configure(transport,_adapter,"25963876","0.6.2")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
@@ -260,6 +261,9 @@ func _action(kind: String, payload: Dictionary) -> Dictionary:
 
 func _process(delta: float) -> void:
 	if _finished or _network==null or _adapter==null or _directory.is_empty(): return
+	if _role=="guest" and _presence_check and _network.session.state==_network.session.State.PLAYING:
+		_check_guest_load_visuals()
+		if _revision_frames>=2 and _network.world_sync.revision==_last_revision: _check_guest_belt_view()
 	if _role=="guest" and _network.session.state==_network.session.State.PLAYING and _adapter.nodes.cfg.get("prop_cap")==330:
 		_checks.settings_live = true
 		var expected := TEST_SETTINGS.duplicate(true)
@@ -300,9 +304,11 @@ func _process(delta: float) -> void:
 						loads.append(encoded_load.value.get_string_from_utf8() if encoded_load.ok else encoded_load.code)
 				_building_history[key] = buildings
 				_load_history[key] = loads
-				while _field_history.size()>16:
+				while _field_history.size()>256:
 					var oldest: Variant = _field_history.keys()[0]
 					_field_history.erase(oldest)
+				while _state_history.size()>16:
+					var oldest: Variant = _state_history.keys()[0]
 					_state_history.erase(oldest)
 					_sample_history.erase(oldest)
 					_building_history.erase(oldest)
@@ -332,6 +338,132 @@ func _process(delta: float) -> void:
 	if _write_due>=0.1:
 		_write_due = 0.0
 		_write("RUNNING")
+
+func _check_guest_belt_view() -> void:
+	if not _adapter._guest_belts_ready or _adapter._belts_pending: return
+	var expected: Dictionary = _adapter._read_belts()
+	var actual: Dictionary = _adapter.nodes.world.call("_belts_to_dict")
+	var matching := true
+	var expected_count := 0
+	var actual_count := 0
+	for category in ["paths","lifts","stairs"]:
+		var key := "records" if category=="paths" else "rows"
+		for path in expected.get(category,[]): expected_count += path.get(key,[]).size()
+		for path in actual.get(category,[]): actual_count += path.get(key,[]).size()
+	if expected_count!=actual_count: matching = false
+	var props: RefCounted = _adapter._prop_module()
+	if props.initialized and _adapter.nodes.props.get("items").size()!=props._records.size(): matching = false
+	var used := {}
+	for category in ["paths","lifts","stairs"]:
+		var key := "records" if category=="paths" else "rows"
+		for path in expected.get(category,[]):
+			for record in path.get(key,[]):
+				var found := false
+				for view_index in range(actual.get(category,[]).size()):
+					var view: Dictionary = actual[category][view_index]
+					if view.get("a")!=path.get("a") or view.get("b")!=path.get("b") or view.get("at")!=path.get("at"): continue
+					for record_index in range(view.get(key,[]).size()):
+						var drawn: Dictionary = view[key][record_index]
+						var slot := str(category)+":"+str(view_index)+":"+str(record_index)
+						if not used.has(slot) and drawn.get("kind")==record.get("kind") and drawn.get("strands")==record.get("strands") and drawn.get("xform") is Transform3D and drawn.xform.origin.distance_to(record.xform.origin)<0.05:
+							found = true
+							used[slot] = true
+							break
+					if found: break
+				if not found: matching = false
+	if matching:
+		if expected_count>0: _checks.belt_view_rendered = true
+		elif _checks.get("belt_view_rendered",false): _checks.belt_view_cleared = true
+	else:
+		_checks.belt_view_misses = int(_checks.get("belt_view_misses",0))+1
+		if not _checks.has("belt_view_miss_detail"):
+			_checks.belt_view_miss_detail = {"expected":expected_count,"actual":actual_count,"props":_adapter.nodes.props.get("items").size(),"expected_props":props._records.size(),"revision":_last_revision}
+
+func _check_belt_replacement() -> bool:
+	# This private pre-join world is replaced by the host snapshot afterwards.
+	var builds: Node = _adapter.nodes.builds
+	builds.call("add_conveyor",Vector3(14,0,12),Vector3(18,0,12),0)
+	builds.call("add_hay_stairs",Vector3(18,0,18),0.0)
+	builds.call("add_hay_lift",Vector3(14,0,18),0.0,1,2.0,false,0)
+	await get_tree().process_frame
+	var belt: Node = builds.get("conveyors")[-1]
+	var stair: Node = builds.get("hay_stairs")[-1]
+	var lift: Node = builds.get("hay_lifts")[-1]
+	belt.call("push_record",0,37,-1,{"strands":37},Vector3(15,0,12),0.7)
+	var rows: Array = belt.call("records_to_save")
+	if rows.is_empty(): return false
+	stair.call("_add_record_row",rows[0].duplicate(true),0.5,0.0,Basis.IDENTITY)
+	var seed: Dictionary = _adapter.nodes.world.call("_belts_to_dict").duplicate(true)
+	if seed.get("stairs",[]).is_empty(): return false
+	seed.lifts = [{"at":lift.global_position,"rows":seed.stairs[-1].rows.duplicate(true)}]
+	_adapter._belt_paths_world = 0
+	var props: int = _adapter.nodes.props.get("items").size()
+	var old_draws: Array = []
+	for stage in ["first","identical","moved","empty"]:
+		var wanted := seed.duplicate(true)
+		if stage=="empty": wanted = {"paths":[],"lifts":[],"stairs":[]}
+		if stage=="moved":
+			for category in ["paths","lifts","stairs"]:
+				var key := "records" if category=="paths" else "rows"
+				wanted[category][0][key][0].s += 0.25
+		if not _adapter.apply_confirmed_event({"patch":{"belts":wanted}}).ok: return false
+		for frame in range(2): await get_tree().process_frame
+		for draw in old_draws:
+			if is_instance_valid(draw): return false
+		old_draws.clear()
+		var actual: Dictionary = _adapter.nodes.world.call("_belts_to_dict")
+		for category in ["paths","lifts","stairs"]:
+			var key := "records" if category=="paths" else "rows"
+			var count := 0
+			for path in actual.get(category,[]):
+				for record in path.get(key,[]):
+					count += 1
+					if record.strands!=37 or absf(float(record.s)-float(wanted[category][0][key][0].s))>0.001: return false
+			if count!=(0 if stage=="empty" else 1): return false
+		for machine in [stair,lift]:
+			for row in machine.get("_carried"):
+				if not row.get("draw") is Node3D or not is_instance_valid(row.draw) or not row.draw.is_visible_in_tree(): return false
+				old_draws.append(row.draw)
+		if _adapter.nodes.props.get("items").size()!=props: return false
+	_checks.belt_replacement = true
+	return true
+
+func _check_guest_load_visuals() -> void:
+	var peer: int = _network._transport.local_peer_id()
+	var load_state: Dictionary = _adapter._tool_loads().selected(peer,1)
+	if load_state.is_empty(): return
+	if load_state.count<=0:
+		if _checks.get("tool_load_received",false): _checks.tool_load_emptied = true
+		return
+	_checks.tool_load_received = true
+	_adapter.select_local_tool(1)
+	_adapter.pump_guest_visuals()
+	_runtime.ui.set_panel_open(false)
+	_runtime.ui.set_tool_load(_adapter.read_local_tool_load())
+	_runtime.ui._process(0.0)
+	_checks.tool_load_visible = _runtime.ui._tool_feedback.visible and _runtime.ui._tool_feedback.text.contains(str(load_state.count)+" / "+str(load_state.capacity))
+	var loose: RefCounted = _adapter._loose_module()
+	if _checks.get("tool_straw_local",false) and _checks.get("tool_straw_released",false): return
+	for row in loose.held:
+		if row.peer!=peer or not loose._draw_slots.has(row.id): continue
+		var slot: Dictionary = loose._draw_slots[row.id]
+		var batch: MultiMesh = loose._hay if slot.kind==0 else loose._needles
+		var body: Node3D = _adapter.nodes.player.get("shovel").get("body")
+		var original := body.global_transform
+		var previous := batch.get_instance_transform(slot.index)
+		body.global_position += Vector3(0.13,0,0)
+		loose.follow_local(peer,_adapter.nodes.player)
+		var expected: Transform3D = body.global_transform*row.offset
+		var moved := batch.get_instance_transform(slot.index)
+		_checks.tool_straw_local = moved.origin.distance_to(expected.origin)<0.001 and moved.origin.distance_to(previous.origin)>0.12
+		var owners: Array = loose.held.duplicate(true)
+		loose.accept_holds([])
+		var canonical: Transform3D = loose._transform(loose.current.poses,loose.current.ids.find(row.id))
+		_checks.tool_straw_released = batch.get_instance_transform(slot.index).origin.distance_to(canonical.origin)<0.001
+		body.global_transform = original
+		loose.accept_holds(owners)
+		loose.follow_local(peer,_adapter.nodes.player)
+		break
 
 func _extra_actions() -> void:
 	_stage = "extra_actions"
@@ -397,6 +529,7 @@ func _extra_actions() -> void:
 				_checks.needle_deposit = _network.world_sync.submit_action(peer,1002,"needle_collect",{"operation":"deposit"}).ok
 				_checks.needle_once = not _network.world_sync.submit_action(peer,1003,"needle_collect",{"operation":"deposit"}).ok
 		if _presence_check:
+			await _check_arm_capture()
 			await _check_power_tool(actor,peer)
 			await _check_build_steps(actor)
 			await _check_loaded_departure(actor,peer)
@@ -442,6 +575,10 @@ func _extra_actions() -> void:
 		_fatal = "LOADED_DEPARTURE_FAILED"
 		_done = false
 	if _presence_check:
+		for key in ["arm_live_capture","arm_belt_delivery"]:
+			if not _checks.get(key,false):
+				_fatal = "CHECK_"+key.to_upper()
+				_done = false
 		for key in ["native_marker","marker_common","marker_colors","connection_status","marker_departure_cleanup","preset_roundtrip"]:
 			if not _checks.get(key,false):
 				_fatal = "CHECK_"+key.to_upper()
@@ -602,7 +739,7 @@ func _check_build_steps(actor: Node3D) -> void:
 			_adapter.nodes.tech.call("grant",str(key),1)
 	actor.call("equip_build",id)
 	_checks.build_selected = {"id":actor.get("build_id"),"tool":actor.get("current_tool")}
-	var before: int = _adapter.nodes.builds.call("to_array").size()
+	var before: int = _adapter._live_frame().get("buildings",[]).size()
 	_checks.build_step_details = []
 	for x in [-10.0,-7.0]:
 		actor.global_position = Vector3(x,float(_adapter.nodes.field.call("top_at",x,-12.0))+0.2,-12)
@@ -612,10 +749,39 @@ func _check_build_steps(actor: Node3D) -> void:
 		var result: Dictionary = _adapter._perform_action(actor,"place",{"id":id})
 		var status: Dictionary = actor.get("build").call("status")
 		_checks.build_step_details.append({"id":id,"result":result,"placing":status.get("placing"),"ok":status.get("ok"),"done":status.get("done"),"length":status.get("length"),"reason":status.get("reason")})
-	var after: int = _adapter.nodes.builds.call("to_array").size()
+	var after: int = _adapter._live_frame().get("buildings",[]).size()
 	_checks.build_step_counts = {"before":before,"after":after}
 	_checks.build_steps = after>before
 	actor.call("put_away_build")
+
+func _check_arm_capture() -> void:
+	var from := Vector3(-10,0,2)
+	var to := Vector3(5,0,2)
+	_adapter.nodes.builds.call("add_conveyor",from,to,0)
+	_adapter.nodes.builds.call("add_robotic_arm",Vector3(-9,0,0),0.0,1,0.0)
+	var arm: Node = _adapter.nodes.builds.get("robotic_arms")[-1]
+	for step in range(120):
+		arm.call("set_power",1.0)
+		arm.call("set_power_blocked",false)
+		arm.call("_process",0.2)
+		var count := int(arm.get("_payload_count"))
+		if count>0:
+			var phase := int(arm.get("_phase"))
+			var frame: Dictionary = _adapter._live_frame()
+			_checks.arm_live_capture = not frame.is_empty() and int(arm.get("_payload_count"))==count and int(arm.get("_phase"))==phase
+			_checks.arm_load = {"before":count,"after":int(arm.get("_payload_count"))}
+			break
+		await get_tree().physics_frame
+	for step in range(120):
+		arm.call("set_power",1.0)
+		arm.call("set_power_blocked",false)
+		arm.call("_process",0.2)
+		var belts: Dictionary = _adapter.nodes.world.call("_belts_to_dict")
+		for path in belts.get("paths",[]):
+			if path.get("a")==from and path.get("b")==to and not path.get("records",[]).is_empty():
+				_checks.arm_belt_delivery = true
+		if _checks.get("arm_belt_delivery",false): break
+		await get_tree().physics_frame
 
 func _check_power_tool(actor: Node3D, peer: int) -> void:
 	# Native purchase is controlled setup; the earlier shared-budget race is
@@ -689,7 +855,7 @@ func _check_host_reload() -> void:
 		if scene!=null and scene.scene_file_path=="res://scenes/main.tscn" and scene.get("_built")==true:
 			_adapter.bind(get_tree().root)
 			var state: Dictionary = _adapter.nodes.state.call("to_dict")
-			_checks.host_reload = state.get("money")==expected.get("money") and state.get("hay_dug")==expected.get("hay_dug") and state.get("needles_found")==expected.get("needles_found") and _adapter.nodes.builds.call("to_array").size()==buildings and _adapter.nodes.props.call("to_array").size()==props
+			_checks.host_reload = state.get("money")==expected.get("money") and state.get("hay_dug")==expected.get("hay_dug") and state.get("needles_found")==expected.get("needles_found") and _adapter._live_frame().get("buildings",[]).size()==buildings and _adapter.nodes.props.call("to_array").size()==props
 			if not _checks.host_reload: _fatal = "HOST_RELOAD_MISMATCH"
 			return
 	_fatal = "HOST_RELOAD_TIMEOUT"

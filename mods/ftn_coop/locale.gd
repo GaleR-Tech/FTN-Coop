@@ -138,7 +138,7 @@ const EN := {
 	"Gebäude":"Buildings", "Bauen":"Build", "Forschung":"Research", "Verbessern":"Upgrade",
 	"Nadel im angeschauten Schrank ablegen":"Deposit needle in the cabinet you are looking at",
 	"Maschine an":"Machine on", "Maschine aus":"Machine off",
-	"Hand":"Hand", "Schaufel":"Shovel", "Heugabel":"Pitchfork", "Besen":"Broom", "Spielzeug":"Toy",
+	"Hand":"Hand", "Schaufel":"Shovel", "Heugabel":"Pitchfork", "Besen":"Broom", "Spielzeug":"Toy", "Voll":"Full",
 	"Metalldetektor":"Metal detector", "Hofsauger":"Yard vacuum", "Feuerzeug":"Lighter",
 	"Schubkarre":"Wheelbarrow", "Spaten":"Spade", "Eimer":"Bucket", "Sandschaufel":"Sand shovel",
 	"unbekannt":"unknown", "anderes":"other", "keine":"none", "Gast":"Guest",

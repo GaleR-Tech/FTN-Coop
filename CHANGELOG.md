@@ -1,5 +1,27 @@
 # Changelog / Änderungen
 
+## 0.6.2 · 2026-10-22
+
+### English
+
+- Fixed live building capture clearing robot-arm loads before belt delivery. Export copies preserve the native building format while leaving live arm payloads and normal save accounting intact.
+- Guest belt updates replace previous loads on conveyors, lifts and hay stairs without spilling duplicate objects. Rendering waits for restored buildings and combines pending updates. Exact host records remain the authoritative state.
+- Live updates send changed loose-straw IDs, transforms and tint plus removals instead of retransmitting the entire pool. Stable render slots update only the changed instances. Full join snapshots and bounded validation remain in use.
+- Game-state updates omit unchanged fields, including large needle-position arrays. Guests merge validated changes into their existing state before native restoration.
+- Guest number keys now use the native compact hotbar mapping, matching the visible symbols when locked tools are hidden.
+- Host-confirmed shovel and pitchfork count/capacity and full status appear above the guest hotbar. Carried straw follows the guest's local tool pose; releasing ownership restores the authoritative world pose.
+- Everyone must install 0.6.2 and restart. The new update format is incompatible with 0.6.1, so mixed versions are refused. Internet latency, the reported hay appearance and Linux/Proton crashes require testing on the affected systems.
+
+### Deutsch
+
+- Die laufende Gebäudeerfassung leert die Ladung der Roboterarme nicht mehr vor der Bandübergabe. Exportkopien erhalten das native Gebäudeformat; laufende Armladungen und die normale Speicherabrechnung bleiben erhalten.
+- Bandaktualisierungen ersetzen beim Gast die bisherige Ladung auf Förderbändern, Aufzügen und Heutreppen, ohne zusätzliche Gegenstände auszuschütten. Die Darstellung wartet auf wiederhergestellte Gebäude und fasst ausstehende Aktualisierungen zusammen. Maßgeblich bleiben die exakten Host-Datensätze.
+- Laufende Änderungen übertragen nur geänderte Halm-IDs, Positionen und Farben sowie entfernte IDs statt des gesamten Pools. Bei unveränderten Zeichenplätzen werden nur betroffene Instanzen aktualisiert. Vollständige Beitrittsdaten und begrenzte Datenprüfung bleiben erhalten.
+- Spielstandänderungen lassen unveränderte Felder weg, darunter große Nadelpositionslisten. Gäste fügen geprüfte Änderungen vor der nativen Übernahme in ihren bestehenden Stand ein.
+- Zahlentasten beim Gast verwenden die originale kompakte Schnellleistenbelegung und passen zu den sichtbaren Symbolen, wenn gesperrte Werkzeuge ausgeblendet sind.
+- Vom Host bestätigte Ladung/Kapazität und Voll-Status von Schaufel und Heugabel stehen über der Gast-Schnellleiste. Getragenes Heu folgt der lokalen Werkzeugposition; nach dem Ablegen gilt wieder die Weltposition des Hosts.
+- Alle müssen 0.6.2 installieren und neu starten. Das neue Änderungsformat ist mit 0.6.1 inkompatibel; gemischte Versionen werden abgewiesen. Internetlatenz, die gemeldete Heudarstellung und Linux-/Proton-Abstürze benötigen Tests auf den betroffenen Systemen.
+
 ## 0.6.1 · 2026-10-20
 
 ### English

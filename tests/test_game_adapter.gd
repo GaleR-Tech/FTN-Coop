@@ -131,6 +131,9 @@ func run(tree: SceneTree) -> Array[String]:
 			errors.append("A guest must preserve host fuel and peak money even when the native save loader normalizes them.")
 		normalizing.free()
 	live_state_checks(errors)
+	sparse_state_checks(errors)
+	live_build_capture_checks(errors)
+	await belt_replica_checks(tree,errors)
 	await guest_visual_checks(tree,errors)
 	guest_field_checks(errors)
 	guest_clock_checks(errors)
@@ -144,6 +147,152 @@ func run(tree: SceneTree) -> Array[String]:
 	unsafe_snapshot.cell = 0.0
 	if fresh._snapshot_valid(unsafe_snapshot): errors.append("Invalid native world dimensions must fail before native world allocation.")
 	return errors
+
+class BeltRun extends RefCounted:
+	var rows: Array = []
+	func clear() -> void: rows.clear()
+
+class BeltPath extends Node:
+	var run := BeltRun.new()
+	func records_to_save() -> Array: return run.rows.duplicate(true)
+
+class BeltCargo extends Node:
+	var _carried: Array = []
+
+class CargoBuilds extends Node:
+	var hay_stairs: Array = []
+	var hay_lifts: Array = []
+
+class BeltView extends Node:
+	var restores := 0
+	var duplicated_props := 0
+	var saves: Node
+	var path := BeltPath.new()
+	var builds := CargoBuilds.new()
+	func _init() -> void:
+		add_child(path)
+		add_child(builds)
+		for category in ["hay_stairs","hay_lifts"]:
+			var machine := BeltCargo.new()
+			builds.add_child(machine)
+			builds.get(category).append(machine)
+	func _belts_to_dict() -> Dictionary: return {"paths":[{"records":path.run.rows.duplicate(true)}]}
+	func _restore_belts() -> void:
+		restores += 1
+		for entry in saves._pending_belts.get("paths",[]):
+			if not path.run.rows.is_empty(): duplicated_props += entry.records.size()
+			else: path.run.rows = entry.records.duplicate(true)
+		for category in ["stairs","lifts"]:
+			var machine: Node = builds.get("hay_"+category)[0]
+			for entry in saves._pending_belts.get(category,[]):
+				for record in entry.rows:
+					var draw := Node3D.new()
+					machine.add_child(draw)
+					machine._carried.append({"rec":record.duplicate(true),"draw":draw})
+
+class BeltSave extends Node:
+	var _pending_belts: Dictionary = {}
+
+func belt_replica_checks(tree: SceneTree, errors: Array[String]) -> void:
+	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
+	if not adapter.has_method("_read_belts"):
+		errors.append("Guest belt state must retain the host's exact records despite normalization by the native visual importer.")
+		return
+	var view := BeltView.new()
+	var saves := BeltSave.new()
+	view.saves = saves
+	tree.root.add_child(view)
+	adapter.nodes = {"world":view,"saves":saves,"builds":view.builds}
+	adapter.guest_mode = true
+	var first := {"paths":[{"records":[{"strands":97,"s":0.125}]}],"stairs":[{"rows":[{"strands":17,"s":0.25}]}],"lifts":[{"rows":[{"strands":22,"s":0.5}]}]}
+	var latest := first.duplicate(true)
+	latest.paths[0].records[0].s = 0.5
+	if not adapter.apply_confirmed_event({"patch":{"belts":first}}).ok or not adapter.apply_confirmed_event({"patch":{"belts":latest}}).ok:
+		errors.append("Valid host belt records must be accepted.")
+	if adapter._read_belts()!=latest or view.restores!=0:
+		errors.append("Belt state must commit immediately, with native rendering deferred until newly restored paths are ready.")
+	await tree.process_frame
+	if view.restores!=1 or saves._pending_belts!=latest:
+		errors.append("Several belt updates in one frame must restore only the latest state once.")
+	for wanted in [latest,first,{"paths":[]}]:
+		adapter.apply_confirmed_event({"patch":{"belts":wanted}})
+		await tree.process_frame
+		var records: Array = wanted.paths[0].records if not wanted.paths.is_empty() else []
+		if view.path.run.rows!=records or view.duplicated_props!=0:
+			errors.append("Repeated, moving and empty guest belt updates must replace native cargo without spilling or duplicating props.")
+		for category in ["stairs","lifts"]:
+			var machine: Node = view.builds.get("hay_"+category)[0]
+			var count: int = wanted.get(category,[]).size()
+			if machine._carried.size()!=count or machine.get_child_count()!=count:
+				errors.append("Guest lift and stair cargo must replace both rows and their old render nodes without leaking visual duplicates.")
+	var replacement := BeltView.new()
+	replacement.saves = saves
+	replacement.path.run.rows = [{"strands":22}]
+	tree.root.add_child(replacement)
+	adapter.nodes.world = replacement
+	if adapter._read_belts()!=replacement._belts_to_dict(): errors.append("A replaced guest world must never reuse cargo cached for the old world.")
+	adapter._queue_belt_render()
+	await tree.process_frame
+	if replacement.restores!=0 or replacement.path.run.rows!=[{"strands":22}]: errors.append("An update to new buildings must not import cargo from a previous guest world.")
+	adapter.nodes.world = view
+	replacement.free()
+	var completed := view.restores
+	adapter.apply_confirmed_event({"patch":{"belts":first}})
+	adapter.guest_mode = false
+	await tree.process_frame
+	if view.restores!=completed: errors.append("Leaving must cancel queued guest belt rendering.")
+	view.free()
+	saves.free()
+
+func live_build_capture_checks(errors: Array[String]) -> void:
+	if not ResourceLoader.exists("res://mods/ftn_coop/live_build_capture.gd"):
+		errors.append("Live building snapshots must retain an arm's in-flight hay instead of using destructive save accounting.")
+		return
+	var module: Script = load("res://mods/ftn_coop/live_build_capture.gd")
+	var native: Script = load("res://tests/fixtures/save_arm.gd")
+	var driver: RefCounted = module.new()
+	var arm: Node = native.new()
+	var manager: Node = load("res://tests/fixtures/save_builds.gd").new()
+	manager.robotic_arms.append(arm)
+	var captured: Dictionary = driver.capture(manager)
+	if not captured.ok or captured.value!=[{"type":"robotic_arm","position":Vector3.ZERO,"tier":1}] or arm.get("payload")!=97:
+		errors.append("A live snapshot must retain the native building schema and the complete loaded arm payload.")
+	arm.set("payload",54)
+	if not driver.capture(manager).ok or arm.get("payload")!=54: errors.append("Repeated snapshots must capture fresh data without consuming a cached arm's load.")
+	arm.call("to_dict")
+	if arm.get("payload")!=0: errors.append("Native save accounting must still run outside live network capture.")
+	manager.robotic_arms.clear()
+	if not driver.capture(manager).ok or is_instance_valid(driver._root): errors.append("Removing the last arm must release the capture copies while the session continues.")
+	var unsupported := Node.new()
+	manager.robotic_arms = [unsupported]
+	if driver.capture(manager).ok: errors.append("Unsupported arms must reject before native save accounting is called.")
+	driver.close()
+	unsupported.free()
+	arm.free()
+	manager.free()
+
+func sparse_state_checks(errors: Array[String]) -> void:
+	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
+	var needles := PackedVector3Array()
+	needles.resize(10000)
+	var before := {"state":{"money":10.0,"needle_positions":needles,"run_secs":1.0}}
+	var after: Dictionary = before.duplicate(true)
+	after.state.money = 25.0
+	var patch: Dictionary = adapter._difference(before,after)
+	if patch!={"state_delta":{"money":25.0}}:
+		errors.append("A money change must send only that state value, without retransmitting the unchanged needle collection.")
+	var replica: Script = load("res://tests/fixtures/replica_boundary.gd")
+	var state: Node = replica.LiveState.new()
+	adapter.nodes = {"state":state}
+	adapter.guest_mode = true
+	if not adapter.apply_confirmed_event({"patch":{"state_delta":{"money":25.0}}}).ok or state.data.money!=25.0 or state.data.needle_stock!=[0]:
+		errors.append("A sparse state update must change money while retaining every omitted authoritative value.")
+	for invalid in [{"money":"25"},{"unknown":true},{"money":30.0,"needle_stock":["res://bad.gd"]}]:
+		if adapter.apply_confirmed_event({"patch":{"state_delta":invalid}}).ok or state.data.money!=25.0:
+			errors.append("Malformed sparse state must reject the whole event before changing money.")
+	if adapter.apply_confirmed_event({"patch":{"state":state.data.duplicate(true),"state_delta":{"money":99.0}}}).ok:
+		errors.append("An event cannot ambiguously contain both full and sparse game state.")
+	state.free()
 
 func guest_field_checks(errors: Array[String]) -> void:
 	if not FileAccess.file_exists("res://mods/ftn_coop/guest_field.gd"):

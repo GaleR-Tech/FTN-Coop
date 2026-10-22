@@ -9,6 +9,61 @@ var _hay: MultiMesh
 var _needles: MultiMesh
 var _native_mesh: Mesh
 var _native_material: Material
+var held: Array = []
+var _draw_slots: Dictionary = {}
+
+func capture_holds(players: Dictionary) -> Array:
+	var rows := []
+	for peer in players:
+		var player: Node = players[peer]
+		if not is_instance_valid(player): continue
+		for role in ["shovel","pitchfork"]:
+			var tool: Variant = player.get(role)
+			if not tool is Node or not tool.get("_riding") is Dictionary or not tool.get("body") is Node3D: continue
+			var frame: Transform3D = tool.get("body").global_transform.affine_inverse()
+			for body in tool.get("_riding").values():
+				if is_instance_valid(body) and body is Node3D and _ids.has(body):
+					rows.append({"id":_ids[body],"peer":int(peer),"tool":1 if role=="shovel" else 2,"offset":frame*body.global_transform})
+	rows.sort_custom(func(a: Dictionary,b: Dictionary): return a.id<b.id)
+	return rows
+
+func validate_holds(rows: Variant, ids: PackedInt32Array) -> bool:
+	if not rows is Array or rows.size()>LIMIT: return false
+	var known := {}
+	for id in ids: known[id] = true
+	var previous := 0
+	for row in rows:
+		if not row is Dictionary or row.size()!=4 or typeof(row.get("id"))!=TYPE_INT or row.id<=previous or not known.has(row.id): return false
+		if typeof(row.get("peer"))!=TYPE_INT or row.peer<1 or row.peer>2147483647 or typeof(row.get("tool"))!=TYPE_INT or row.tool not in [1,2] or not row.get("offset") is Transform3D: return false
+		previous = row.id
+		var offset: Transform3D = row.offset
+		if not offset.origin.is_finite() or offset.origin.length()>32.0: return false
+		for column in [offset.basis.x,offset.basis.y,offset.basis.z]:
+			if not column.is_finite() or column.length()>16.0: return false
+	return true
+
+func follow_local(peer: int, player: Node) -> void:
+	if not is_instance_valid(player): return
+	for row in held:
+		if row.peer!=peer or not _draw_slots.has(row.id): continue
+		var tool: Variant = player.get("shovel" if row.tool==1 else "pitchfork")
+		if not tool is Node or not tool.get("body") is Node3D: continue
+		var slot: Dictionary = _draw_slots[row.id]
+		var batch: MultiMesh = _hay if slot.kind==0 else _needles
+		batch.set_instance_transform(slot.index,tool.get("body").global_transform*row.offset)
+
+func accept_holds(rows: Array) -> bool:
+	if not validate_holds(rows,current.ids): return false
+	var owners := {}
+	for row in rows: owners[row.id] = Vector2i(row.peer,row.tool)
+	var offsets := _offsets(current)
+	for previous in held:
+		if owners.get(previous.id)==Vector2i(previous.peer,previous.tool) or not _draw_slots.has(previous.id): continue
+		var slot: Dictionary = _draw_slots[previous.id]
+		var batch: MultiMesh = _hay if slot.kind==0 else _needles
+		batch.set_instance_transform(slot.index,_transform(current.poses,offsets[previous.id]))
+	held = rows.duplicate(true)
+	return true
 
 func use_native_visuals(source: Node) -> void:
 	if not is_instance_valid(source): return
@@ -71,6 +126,113 @@ func validate(data: Dictionary) -> bool:
 			if not is_finite(value) or absf(value)>(8.0 if component<9 else 2048.0): return false
 	return true
 
+func difference(before: Dictionary, after: Dictionary) -> Dictionary:
+	var old := _offsets(before)
+	var keep := _offsets(after)
+	var changed := PackedInt32Array()
+	var removed := PackedInt32Array()
+	for id in old:
+		if not keep.has(id): removed.append(id)
+	for index in range(after.ids.size()):
+		var id: int = after.ids[index]
+		var previous: int = old.get(id,-1)
+		if previous<0 or before.kinds[previous]!=after.kinds[index] or _tint(before,previous)!=_tint(after,index):
+			changed.append(index)
+			continue
+		if before.poses.slice(previous*12,previous*12+12)!=after.poses.slice(index*12,index*12+12): changed.append(index)
+	return {"removed":removed,"updated":_select(after,changed)}
+
+func validate_delta(delta: Dictionary) -> bool:
+	if delta.size()!=2 or not delta.get("removed") is PackedInt32Array or not delta.get("updated") is Dictionary or not validate(delta.updated): return false
+	if delta.removed.size()>LIMIT: return false
+	var old := _offsets(current)
+	var updates := _offsets(delta.updated)
+	var previous := 0
+	for id in delta.removed:
+		if id<=previous or not old.has(id) or updates.has(id): return false
+		previous = id
+		old.erase(id)
+	for id in updates: old[id] = true
+	return old.size()<=LIMIT
+
+func next_ids(delta: Dictionary) -> PackedInt32Array:
+	var ids := _offsets(current)
+	for id in delta.removed: ids.erase(id)
+	for id in delta.updated.ids: ids[id] = true
+	var ordered := ids.keys()
+	ordered.sort()
+	return PackedInt32Array(ordered)
+
+func merge_delta(delta: Dictionary) -> Dictionary:
+	if not validate_delta(delta): return _error("LOOSE_INVALID")
+	var old := _offsets(current)
+	var updates := _offsets(delta.updated)
+	for id in delta.removed: old.erase(id)
+	var ids := old.keys()
+	for id in updates:
+		if not old.has(id): ids.append(id)
+	if ids.size()>LIMIT: return _error("LOOSE_INVALID")
+	ids.sort()
+	var result := {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}
+	for id in ids:
+		var source: Dictionary = delta.updated if updates.has(id) else current
+		var index: int = updates[id] if updates.has(id) else old[id]
+		_append(result,source,index)
+	return _ok(result)
+
+func apply_delta(delta: Dictionary, parent: Node) -> Dictionary:
+	if not validate_delta(delta): return _error("LOOSE_INVALID")
+	var old := _offsets(current)
+	var updates: Dictionary = delta.updated
+	var stable: bool = delta.removed.is_empty() and is_instance_valid(_root)
+	for index in range(updates.ids.size()):
+		var id: int = updates.ids[index]
+		if not old.has(id) or current.kinds[old[id]]!=updates.kinds[index]:
+			stable = false
+			break
+	if stable:
+		var data := current.duplicate(true)
+		if not data.has("colors"):
+			data.colors = PackedColorArray()
+			data.colors.resize(data.ids.size())
+			data.colors.fill(Color.WHITE)
+		for index in range(updates.ids.size()):
+			var id: int = updates.ids[index]
+			var at: int = old[id]
+			for component in range(12): data.poses[at*12+component] = updates.poses[index*12+component]
+			data.colors[at] = _tint(updates,index)
+			var slot: Dictionary = _draw_slots[id]
+			var batch: MultiMesh = _hay if slot.kind==0 else _needles
+			batch.set_instance_transform(slot.index,_transform(updates.poses,index))
+			batch.set_instance_color(slot.index,data.colors[at])
+		current = data
+		return _ok()
+	var merged := merge_delta(delta)
+	return apply(merged.value,parent) if merged.ok else merged
+
+func _transform(poses: PackedFloat32Array, index: int) -> Transform3D:
+	var at := index*12
+	return Transform3D(Basis(Vector3(poses[at],poses[at+1],poses[at+2]),Vector3(poses[at+3],poses[at+4],poses[at+5]),Vector3(poses[at+6],poses[at+7],poses[at+8])),Vector3(poses[at+9],poses[at+10],poses[at+11]))
+
+func _offsets(data: Dictionary) -> Dictionary:
+	var result := {}
+	for index in range(data.ids.size()): result[data.ids[index]] = index
+	return result
+
+func _tint(data: Dictionary, index: int) -> Color:
+	return data.colors[index] if data.has("colors") else Color.WHITE
+
+func _select(data: Dictionary, indices: PackedInt32Array) -> Dictionary:
+	var result := {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}
+	for index in indices: _append(result,data,index)
+	return result
+
+func _append(target: Dictionary, source: Dictionary, index: int) -> void:
+	target.ids.append(source.ids[index])
+	target.kinds.append(source.kinds[index])
+	target.colors.append(_tint(source,index))
+	target.poses.append_array(source.poses.slice(index*12,index*12+12))
+
 func apply(data: Dictionary, parent: Node) -> Dictionary:
 	if not validate(data) or parent==null: return _error("LOOSE_INVALID")
 	if not is_instance_valid(_root): _create_visuals(parent)
@@ -81,15 +243,18 @@ func apply(data: Dictionary, parent: Node) -> Dictionary:
 	_needles.instance_count = data.ids.size()-hay_count
 	var next_hay := 0
 	var next_needle := 0
+	_draw_slots.clear()
 	for index in range(data.ids.size()):
 		var offset: int = index*12
 		var p: PackedFloat32Array = data.poses
 		var transform := Transform3D(Basis(Vector3(p[offset],p[offset+1],p[offset+2]),Vector3(p[offset+3],p[offset+4],p[offset+5]),Vector3(p[offset+6],p[offset+7],p[offset+8])),Vector3(p[offset+9],p[offset+10],p[offset+11]))
 		if data.kinds[index]==0:
+			_draw_slots[data.ids[index]] = {"kind":0,"index":next_hay}
 			_hay.set_instance_transform(next_hay,transform)
 			_hay.set_instance_color(next_hay,data.colors[index] if data.has("colors") else Color.WHITE)
 			next_hay += 1
 		else:
+			_draw_slots[data.ids[index]] = {"kind":1,"index":next_needle}
 			_needles.set_instance_transform(next_needle,transform)
 			next_needle += 1
 	current = data.duplicate(true)
@@ -132,6 +297,8 @@ func close() -> void:
 	if is_instance_valid(_root): _root.queue_free()
 	_root = null
 	_ids.clear()
+	held.clear()
+	_draw_slots.clear()
 	_native_mesh = null
 	_native_material = null
 	current = {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}

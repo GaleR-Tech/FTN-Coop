@@ -14,6 +14,7 @@ docs/*
 # Editor state, secrets, original game files and release binaries stay local.
 .vs/
 .vscode/
+.DS_Store
 .env
 .env.*
 !.env.example

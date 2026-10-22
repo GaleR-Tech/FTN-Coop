@@ -91,9 +91,9 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     if ($Presence) { $launchArguments += '--ftn-coop-presence-check' }
     if ($Persistence) { $launchArguments += '--ftn-coop-save-check' }
     $nativeProcesses += Start-Process -FilePath (Join-Path $privateGameDir 'FindTheNeedle.exe') -ArgumentList $launchArguments -WorkingDirectory $privateGameDir -WindowStyle Hidden -PassThru
-    if ($Players -eq 4 -and $nativeIndex -lt ($Players-1)) {
-        # Four renderers share this test PC. Let each native world finish before
-        # starting another; all participants remain connected for the actions.
+    if ($nativeIndex -lt ($Players-1)) {
+        # Let the host finish before clients start their connection timeout.
+        # Sequential loading also keeps cold native renderers from competing.
         $loadDeadline = (Get-Date).AddSeconds(120)
         while ((Get-Date) -lt $loadDeadline) {
             $loadedReport = Read-NativeReport $nativeNames[$nativeIndex]
@@ -152,6 +152,16 @@ foreach ($reportName in $nativeNames) {
 }
 $scriptErrors = @(Select-String -LiteralPath $nativeLogPaths -Pattern 'SCRIPT ERROR:|^ERROR:' -ErrorAction SilentlyContinue)
 if ($scriptErrors.Count -gt 0 -and $nativeFailure -eq '') { $nativeFailure = 'Native log contains a script or engine error.' }
+if ($Presence -and $nativeFailure -eq '') {
+    $loadWitnesses = @($nativeNames | Where-Object { $_ -ne 'host' } | ForEach-Object { Read-NativeReport $_ } | Where-Object {
+        $_.checks.tool_load_received -and $_.checks.tool_load_visible -and $_.checks.tool_load_emptied -and $_.checks.tool_straw_local -and $_.checks.tool_straw_released
+    })
+    if ($loadWitnesses.Count -eq 0) { $nativeFailure = 'No guest confirmed tool load, local carried-straw motion and release rendering.' }
+    $beltWitnesses = @($nativeNames | Where-Object { $_ -ne 'host' } | ForEach-Object { Read-NativeReport $_ } | Where-Object {
+        $_.checks.belt_view_rendered -and -not $_.checks.belt_view_misses
+    })
+    if ($beltWitnesses.Count -ne ($Players-1)) { $nativeFailure = 'Not every guest retained the native belt load at stable revisions without extra cargo or props.' }
+}
 $summary = @{ ok=($nativeFailure -eq ''); players=$Players; code=$nativeFailure; matching_revisions=$nativeAgreement.counts }
 $summary | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'summary.json')
 $summary | ConvertTo-Json -Compress | Write-Output

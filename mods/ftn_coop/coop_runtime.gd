@@ -331,6 +331,7 @@ func _process(delta: float) -> void:
 		ui.set_update_available(_updates.available())
 		ui.set_rejoin_available(_rejoin.target()>0,_rejoin.can_rejoin(network.session.state==network.session.State.OFFLINE,network.save_session.closing or network.save_session.guest_open))
 		if _adapter.has_method("shared_summary"): ui.set_shared_summary(_adapter.shared_summary())
+		if _adapter.has_method("read_local_tool_load"): ui.set_tool_load(_adapter.read_local_tool_load() if guest else {})
 		if _adapter.has_method("read_shared_settings"):
 			var settings: Dictionary = _adapter.read_shared_settings()
 			ui.set_shared_settings(settings.value if settings.ok else {})

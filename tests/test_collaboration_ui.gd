@@ -18,6 +18,20 @@ func run(tree: SceneTree) -> Array[String]:
 		session.state = session.State.PLAYING
 		session.roster = {1:{"name":"Host","state":"playing","accepted":true},2:{"name":"Guest","state":"playing","accepted":true}}
 		ui.set_language("en")
+		if not ui.has_method("set_tool_load"):
+			errors.append("The guest needs a load indicator during play, outside the F2 panel.")
+		else:
+			session.is_host = false
+			ui.set_tool_load({"tool":1,"count":162,"capacity":162,"full":true})
+			ui._process(0.0)
+			if not ui._tool_feedback.visible or not ui._tool_feedback.text.contains("162 / 162") or not ui._tool_feedback.text.contains("Full"):
+				errors.append("A host-confirmed full shovel must be readable with F2 closed.")
+			ui.set_tool_load({"tool":1,"count":0,"capacity":162,"full":false})
+			ui._process(0.0)
+			if not ui._tool_feedback.text.contains("0 / 162") or ui._tool_feedback.text.contains("Full"):
+				errors.append("After emptying, the displayed shovel load must clear.")
+			ui.set_tool_load({})
+			session.is_host = true
 		session.roster[3] = {"name":"Verbinden …","state":"connecting","accepted":false}
 		ui._refresh_roster()
 		if ui._roster_labels[3].text.contains("Verbinden"): errors.append("An unaccepted connecting peer must use the selected UI language.")

@@ -189,7 +189,7 @@ func _fair_network_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.6.1")
+	controller.configure(wire,game,"25963876","0.6.2")
 	controller.set_process(false)
 	controller.pose_stream_enabled = false
 	controller.session.is_host = true
@@ -236,7 +236,7 @@ func _idle_pose_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.6.1")
+	controller.configure(wire,game,"25963876","0.6.2")
 	controller.set_process(false)
 	controller.session.is_host = true
 	controller.session.state = controller.session.State.PLAYING

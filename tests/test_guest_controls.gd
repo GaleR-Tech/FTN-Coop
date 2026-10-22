@@ -62,11 +62,56 @@ class LoadedPlayer extends Player:
 		add_child(hand)
 		add_child(carry)
 
+class CompactHotbar extends Player:
+	func select_hotbar_slot(index: int) -> void: current_tool = index
+	func select_hotbar_key(index: int) -> void:
+		current_tool = [0,1,8][index]
+
+class LoadTool extends Node:
+	var amount := 54
+	func carried_strands() -> int: return amount
+	func capacity() -> int: return 162
+	func is_full() -> bool: return amount>=162
+
+class LoadPlayer extends Player:
+	var shovel := LoadTool.new()
+	var pitchfork := LoadTool.new()
+	func _init() -> void:
+		if build.get_parent()==null: add_child(build)
+		add_child(shovel)
+		add_child(pitchfork)
+
 func run(_tree: SceneTree) -> Array[String]:
 	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
 	for method in ["local_player_body","select_local_tool","select_local_build","guest_options","set_local_look","shared_summary","pump_local_preview"]:
 		if not adapter.has_method(method): return ["Guest controls must use the verified adapter boundary: "+method]
 	var errors: Array[String] = []
+	if not FileAccess.file_exists("res://mods/ftn_coop/tool_load_state.gd"):
+		errors.append("Guests need the host's per-player shovel and pitchfork load, including full and empty transitions.")
+	else:
+		var loads: RefCounted = load("res://mods/ftn_coop/tool_load_state.gd").new()
+		var load_player := LoadPlayer.new()
+		var rows: Array = loads.capture({2:load_player})
+		if rows!=[{"peer":2,"shovel":{"count":54,"capacity":162,"full":false},"pitchfork":{"count":54,"capacity":162,"full":false}}]:
+			errors.append("Tool fill feedback must use the authoritative controller for that peer.")
+		load_player.shovel.amount = 162
+		loads.accept(loads.capture({2:load_player}))
+		if loads.selected(2,1)!={"tool":1,"count":162,"capacity":162,"full":true}:
+			errors.append("A full shovel must remain distinguishable from a partly filled pitchfork.")
+		load_player.shovel.amount = 0
+		loads.accept(loads.capture({2:load_player}))
+		if loads.selected(2,1).count!=0 or loads.selected(2,1).full: errors.append("Throwing or emptying must clear the guest's confirmed load indicator.")
+		var malformed: Array = loads.current.duplicate(true)
+		malformed[0].shovel.count = -1
+		if loads.accept(malformed) or loads.selected(2,1).count!=0: errors.append("Invalid tool feedback must leave the previous confirmed load intact.")
+		load_player.free()
+	var hotbar := CompactHotbar.new()
+	adapter.nodes = {"player":hotbar}
+	adapter.guest_mode = true
+	adapter.select_hotbar_slot(2)
+	if hotbar.current_tool!=8: errors.append("The third visible hotbar key must select its displayed building, skipping hidden absolute tool slots.")
+	hotbar.free()
+	adapter.guest_mode = false
 	var player := Player.new()
 	var world := World.new()
 	var panel := CataloguePanel.new()

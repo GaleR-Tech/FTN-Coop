@@ -138,6 +138,8 @@ var _rejoin_ready := false
 var _marker_feedback: Label
 var _marker_feedback_code := ""
 var _marker_feedback_left := 0.0
+var _tool_feedback: Label
+var _tool_load: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -154,6 +156,11 @@ func _ready() -> void:
 	_marker_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_marker_feedback.add_theme_color_override("font_color",Color("ffdb99"))
 	root.add_child(_marker_feedback)
+	_tool_feedback = Label.new()
+	_tool_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tool_feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tool_feedback.add_theme_color_override("font_color",Color("ffdb99"))
+	root.add_child(_tool_feedback)
 	_badge = Button.new()
 	_badge.text = "Koop · F2"
 	root.add_child(_badge)
@@ -559,6 +566,9 @@ func _refresh() -> void:
 func tr_text(key: String) -> String:
 	return _locale.text(key) if _locale!=null else key
 
+func set_tool_load(value: Dictionary) -> void:
+	_tool_load = value.duplicate()
+
 func set_language(value: String, persist: bool=false) -> void:
 	if _locale==null or not _locale.set_language(value): return
 	if persist: _locale.save_preferences()
@@ -590,6 +600,12 @@ func _process(_delta: float) -> void:
 	_marker_feedback.text = tr_text(ERRORS.get(_marker_feedback_code,""))
 	_marker_feedback.position = Vector2(maxf(12,viewport.x*0.5-240),maxf(12,viewport.y-100))
 	_marker_feedback.size = Vector2(minf(480,viewport.x-24),52)
+	_tool_feedback.visible = not _tool_load.is_empty() and _session!=null and not _session.is_host and _session.state==_session.State.PLAYING and not is_panel_open()
+	if not _tool_load.is_empty():
+		_tool_feedback.text = tr_text("Schaufel" if _tool_load.tool==1 else "Heugabel")+": "+str(_tool_load.count)+" / "+str(_tool_load.capacity)
+		if _tool_load.full: _tool_feedback.text += " · "+tr_text("Voll")
+	_tool_feedback.position = Vector2(maxf(12,viewport.x*0.5-240),maxf(12,viewport.y-155))
+	_tool_feedback.size = Vector2(minf(480,viewport.x-24),30)
 
 func _label(parent: Node, text: String) -> Label:
 	var label := Label.new()

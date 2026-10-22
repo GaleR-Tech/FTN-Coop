@@ -39,6 +39,77 @@ var _local_peer := 0
 var _guest_countdown: Dictionary = {}
 var _countdown_world_id := 0
 var _guest_field: RefCounted
+var _tool_load_state: RefCounted
+var _build_capture: RefCounted
+var _guest_belts: Dictionary = {}
+var _guest_belts_ready := false
+var _guest_belts_world := 0
+var _belts_pending := false
+var _belts_world_id := 0
+var _belts_epoch := 0
+var _belt_paths: Array[Node] = []
+var _belt_paths_world := 0
+
+func _clear_belt_records() -> void:
+	if not nodes.has("world"): return
+	var world: Node = nodes.world
+	if _belt_paths_world!=world.get_instance_id():
+		_belt_paths.clear()
+		_collect_belt_paths(world)
+		_belt_paths_world = world.get_instance_id()
+	for path in _belt_paths:
+		if not is_instance_valid(path): continue
+		var run: Variant = path.get("run")
+		if run is Object and run.has_method("clear"): run.call("clear")
+	if nodes.has("builds"):
+		for category in ["hay_lifts","hay_stairs"]:
+			var machines: Variant = nodes.builds.get(category)
+			if not machines is Array: continue
+			for machine in machines:
+				if not is_instance_valid(machine): continue
+				var carried: Variant = machine.get("_carried")
+				if not carried is Array: continue
+				for row in carried:
+					if row is Dictionary and row.get("draw") is Node and is_instance_valid(row.draw): row.draw.free()
+				carried.clear()
+
+func _collect_belt_paths(node: Node) -> void:
+	if node.has_method("records_to_save"):
+		var run: Variant = node.get("run")
+		if run is Object and run.has_method("clear"): _belt_paths.append(node)
+	for child in node.get_children(): _collect_belt_paths(child)
+
+func _read_belts() -> Dictionary:
+	if guest_mode and _guest_belts_ready and nodes.has("world") and _guest_belts_world==nodes.world.get_instance_id(): return _guest_belts.duplicate(true)
+	return nodes.world.call("_belts_to_dict").duplicate(true)
+
+func _queue_belt_render() -> void:
+	var world_id: int = nodes.world.get_instance_id()
+	if not _guest_belts_ready or _guest_belts_world!=world_id: return
+	if _belts_pending and _belts_world_id==world_id: return
+	_belts_epoch += 1
+	_belts_pending = true
+	_belts_world_id = world_id
+	_render_belts.call_deferred(world_id,_belts_epoch)
+
+func _render_belts(world_id: int, epoch: int) -> void:
+	if epoch!=_belts_epoch: return
+	_belts_pending = false
+	if not guest_mode or not _guest_belts_ready or _guest_belts_world!=world_id or not nodes.has("world") or not is_instance_valid(nodes.world) or nodes.world.get_instance_id()!=world_id or not nodes.has("saves"): return
+	# Native load import adds cargo and spills blocked records into props.
+	# Clear only the guest run storage; clear_path() would destroy the belt
+	# geometry and spill its load. The host's simulation is never touched.
+	_clear_belt_records()
+	nodes.saves.set("_pending_belts",_guest_belts.duplicate(true))
+	nodes.world.call("_restore_belts")
+
+func _tool_loads() -> RefCounted:
+	if _tool_load_state==null: _tool_load_state = load(MODULE_DIR+"/tool_load_state.gd").new()
+	return _tool_load_state
+
+func read_local_tool_load() -> Dictionary:
+	if not guest_mode or not nodes.has("player"): return {}
+	return _tool_loads().selected(_local_peer,int(nodes.player.get("current_tool")))
 
 func probe(root: Node) -> Dictionary:
 	if root == null or not is_instance_valid(root):
@@ -166,7 +237,8 @@ func select_local_tool(index: int) -> Dictionary:
 
 func select_hotbar_slot(index: int) -> void:
 	if guest_mode and nodes.has("player") and index>=0 and index<10:
-		nodes.player.call("select_hotbar_slot",index)
+		# Number keys address the compact visible bar, not hidden tool indices.
+		nodes.player.call("select_hotbar_key",index)
 		if nodes.player.has_method("_sync_hands"): nodes.player.call("_sync_hands")
 
 func read_actor_equipment(peer: int) -> Dictionary:
@@ -208,6 +280,7 @@ func start_shared_tools() -> void:
 func stop_shared_tools() -> void:
 	if _shared_tools_scope!=null: _shared_tools_scope.close()
 	_shared_tools_scope = null
+	if _build_capture!=null: _build_capture.close()
 
 func try_shared_tool_pickup(actor: Node) -> bool:
 	if _shared_tools_scope==null or not nodes.has("props") or actor==null: return false
@@ -526,7 +599,12 @@ func _live_frame() -> Dictionary:
 			last_sync_error = "WORLD_NOT_READY"
 			return {}
 	last_sync_error = ""
-	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":nodes.builds.call("to_array").duplicate(true),"props":nodes.props.call("to_array").duplicate(true),"belts":nodes.world.call("_belts_to_dict").duplicate(true)}
+	if _build_capture==null: _build_capture = load(MODULE_DIR+"/live_build_capture.gd").new()
+	var buildings: Dictionary = _build_capture.capture(nodes.builds)
+	if not buildings.ok:
+		last_sync_error = buildings.code
+		return {}
+	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":buildings.value,"props":nodes.props.call("to_array").duplicate(true),"belts":_read_belts()}
 	if guest_mode:
 		frame.held_props = _prop_module().held.duplicate(true)
 		if _prop_module().initialized:
@@ -565,6 +643,14 @@ func _live_frame() -> Dictionary:
 				last_sync_error = captured.code
 				return {}
 			frame.loose = captured.value
+		if guest_mode:
+			frame.held_loose = _loose_module().held.duplicate(true)
+			frame.tool_loads = _tool_loads().current.duplicate(true)
+		else:
+			var players := actors.duplicate()
+			if nodes.has("player"): players[1] = nodes.player
+			frame.held_loose = _loose_module().capture_holds(players)
+			frame.tool_loads = _tool_loads().capture(players)
 	return frame
 
 func _loose_module() -> RefCounted:
@@ -576,6 +662,15 @@ func _difference(before: Dictionary, after: Dictionary) -> Dictionary:
 	var patch := {}
 	for key in after:
 		if before.get(key) == after[key]: continue
+		if key=="state" and before.get(key) is Dictionary and before[key].size()==after[key].size():
+			var changes := {}
+			for field in after[key]:
+				if before[key].get(field)!=after[key][field]: changes[field] = after[key][field]
+			patch.state_delta = changes
+			continue
+		if key=="loose" and before.get(key) is Dictionary:
+			patch.loose_delta = _loose_module().difference(before[key],after[key])
+			continue
 		if key != "heights" or not before.get(key) is PackedFloat32Array or before[key].size() != after[key].size():
 			patch[key] = after[key]
 			continue
@@ -639,6 +734,14 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	if _loose != null: _loose.close()
 	_guest_quest.clear()
 	_guest_countdown.clear()
+	_guest_belts.clear()
+	_guest_belts_ready = false
+	_guest_belts_world = 0
+	_belts_pending = false
+	_belts_epoch += 1
+	_belt_paths.clear()
+	_belt_paths_world = 0
+	_tool_loads().current.clear()
 	_countdown_world_id = 0
 	_props_replica = null
 	_local_peer = 0
@@ -833,6 +936,10 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		if not settings.ok: return settings
 	if patch.has("state"):
 		_apply_guest_state(patch.state)
+	elif patch.has("state_delta"):
+		var state: Dictionary = nodes.state.call("to_dict").duplicate(true)
+		state.merge(patch.state_delta,true)
+		_apply_guest_state(state)
 	if patch.has("quest"):
 		_guest_quest = patch.quest.duplicate(true)
 		_refresh_guest_quests(nodes.state.call("to_dict"))
@@ -853,6 +960,9 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		nodes.field.call("_dirty_moved",moved)
 		nodes.field.call("_flush_dirty")
 	if patch.has("buildings"):
+		_clear_belt_records()
+		_belt_paths.clear()
+		_belt_paths_world = 0
 		nodes.builds.call("clear")
 		var slice := int(nodes.builds.get("restore_slice_usec"))
 		nodes.builds.set("restore_slice_usec",0)
@@ -862,12 +972,20 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		_prop_module().apply_records(nodes.props,patch.props)
 	if patch.has("held_props"): _prop_module().held = patch.held_props.duplicate(true)
 	if patch.has("belts"):
-		nodes.saves.set("_pending_belts",patch.belts.duplicate(true))
-		nodes.world.call("_restore_belts")
+		_guest_belts = patch.belts.duplicate(true)
+		_guest_belts_ready = true
+		_guest_belts_world = nodes.world.get_instance_id()
+	if _guest_belts_ready and (patch.has("belts") or patch.has("buildings")): _queue_belt_render()
 	if patch.has("loose"):
 		_hide_native_loose(true)
 		var loose_result: Dictionary = _loose_module().apply(patch.loose,nodes.world.get_tree().root)
 		if not loose_result.ok: return loose_result
+	elif patch.has("loose_delta"):
+		_hide_native_loose(true)
+		var loose_result: Dictionary = _loose_module().apply_delta(patch.loose_delta,nodes.world.get_tree().root)
+		if not loose_result.ok: return loose_result
+	if patch.has("held_loose"): _loose_module().accept_holds(patch.held_loose)
+	if patch.has("tool_loads"): _tool_loads().accept(patch.tool_loads)
 	return _ok()
 
 func _countdown_node() -> Variant:
@@ -949,6 +1067,14 @@ func pump_guest_visuals() -> void:
 	if not guest_mode or not nodes.has("field"): return
 	if nodes.has("player"):
 		if nodes.player.has_method("_sync_hands"): nodes.player.call("_sync_hands")
+		var tool_index: Variant = nodes.player.get("current_tool")
+		if tool_index in [1,2]:
+			var tool: Variant = nodes.player.get("shovel" if tool_index==1 else "pitchfork")
+			if tool is Node and tool.has_method("_update_visual_pose"): tool.call("_update_visual_pose")
+		if nodes.has("world"):
+			var hud: Variant = nodes.world.get("hud")
+			var bar: Variant = hud.get("_hotkey_bar") if hud is Node else null
+			if bar is Node and bar.has_method("_process"): bar.call("_process",0.0)
 		var camera: Variant = nodes.player.get("camera")
 		if nodes.has("props") and camera is Camera3D and _props_replica!=null:
 			_props_replica.follow_local(nodes.props,_local_peer,camera.global_transform)
@@ -958,11 +1084,14 @@ func pump_guest_visuals() -> void:
 			if nodes.has("world"):
 				var detail: Variant = nodes.world.get("detail")
 				if detail is Node and detail.has_method("tick"): detail.call("tick",eye)
+		if _loose!=null: _loose.follow_local(_local_peer,nodes.player)
 	if _guest_field!=null: _guest_field.pump(nodes.field.get_process_delta_time())
 
 func _patch_valid(patch: Dictionary) -> bool:
 	# Cross-field checks below must never depend on wire dictionary order.
 	if patch.has("state") and not patch.state is Dictionary: return false
+	if patch.has("state_delta") and (not patch.state_delta is Dictionary or patch.has("state")): return false
+	if patch.has("loose_delta") and (not patch.loose_delta is Dictionary or patch.has("loose")): return false
 	if patch.has("props") and not patch.props is Array: return false
 	# Quest text is display-only, so separators such as "3 / 5" are safe.
 	# It never enters a native resource or save loader.
@@ -970,8 +1099,8 @@ func _patch_valid(patch: Dictionary) -> bool:
 	native.erase("quest")
 	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","tech","heights","field","buildings","props","held_props","belts","loose","settings","quest","countdown"]: return false
-		var role: String = {"state":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","settings":"cfg","quest":"world","countdown":"world"}[key]
+		if key not in ["state","state_delta","tech","heights","field","buildings","props","held_props","belts","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
+		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
 		if not nodes.has(role): return false
 		if key=="countdown":
 			if not patch[key] is Dictionary or patch[key].size()!=1 or typeof(patch[key].get("seconds"))!=TYPE_INT or patch[key].seconds<0 or patch[key].seconds>86400: return false
@@ -984,13 +1113,14 @@ func _patch_valid(patch: Dictionary) -> bool:
 				for name in ["have","need"]:
 					if typeof(progress.get(name)) not in [TYPE_FLOAT,TYPE_INT] or not is_finite(float(progress[name])) or absf(float(progress[name]))>1.0e15: return false
 			if patch.has("state") and quest.index!=patch.state.get("mission_index"): return false
+			if patch.has("state_delta") and quest.index!=patch.state_delta.get("mission_index",nodes.state.call("to_dict").get("mission_index")): return false
 		if key=="settings" and not _settings().validate(patch[key]).ok: return false
-		if key in ["state","tech"]:
+		if key in ["state","state_delta","tech"]:
 			if not patch[key] is Dictionary: return false
 			var template: Dictionary = nodes[role].call("to_dict")
-			if patch[key].size() != template.size(): return false
-			for name in template:
-				if not patch[key].has(name) or typeof(patch[key][name]) != typeof(template[name]): return false
+			if key!="state_delta" and patch[key].size() != template.size(): return false
+			for name in patch[key]:
+				if not template.has(name) or typeof(patch[key][name]) != typeof(template[name]): return false
 		if key in ["heights","field"]:
 			var heights: PackedFloat32Array = nodes.field.get("heights")
 			if key == "heights":
@@ -1015,6 +1145,15 @@ func _patch_valid(patch: Dictionary) -> bool:
 			if not _prop_module().validate_held(patch[key],records.size()): return false
 		if key == "belts" and (not patch.belts is Dictionary or not nodes.has("saves")): return false
 		if key == "loose" and (not patch.loose is Dictionary or not _loose_module().validate(patch.loose)): return false
+		if key == "loose_delta" and not _loose_module().validate_delta(patch.loose_delta): return false
+		if key == "tool_loads" and not _tool_loads().validate(patch.tool_loads): return false
+		if key == "held_loose":
+			var loose: Variant = patch.get("loose",_loose_module().current)
+			if patch.has("loose_delta"):
+				if not patch.loose_delta is Dictionary: return false
+				if not _loose_module().validate_delta(patch.loose_delta): return false
+				loose = {"ids":_loose_module().next_ids(patch.loose_delta)}
+			if not loose is Dictionary or not loose.get("ids") is PackedInt32Array or not _loose_module().validate_holds(patch.held_loose,loose.ids): return false
 	# Local calls and tests receive the same object-free data restrictions as wire data.
 	var codec: RefCounted = load(MODULE_DIR+"/value_codec.gd").new()
 	return codec.encode(patch,64*1024*1024).ok
