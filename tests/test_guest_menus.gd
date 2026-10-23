@@ -65,7 +65,11 @@ func run(tree: SceneTree) -> Array[String]:
 		event.physical_keycode = binding[1]
 		InputMap.action_add_event(binding[0],event)
 	var requests: Array = []
-	bridge.action_requested.connect(func(kind: String,payload: Dictionary): requests.append([kind,payload]))
+	var opened_menus: Array = []
+	bridge.action_requested.connect(func(kind: String,payload: Dictionary):
+		if kind=="menu_open": opened_menus.append(payload.menu)
+		else: requests.append([kind,payload])
+	)
 	var departures: Array = []
 	bridge.leave_requested.connect(func(): departures.append(true))
 	await press(tree,KEY_B)
@@ -74,6 +78,7 @@ func run(tree: SceneTree) -> Array[String]:
 	if world.catalog_panel.is_open() or bridge.blocks_gameplay(): errors.append("Escape must close the catalog before opening a pause menu.")
 	await press(tree,KEY_T)
 	if not world.tech_panel.is_open(): errors.append("The native research hotkey must open the existing skill tree.")
+	if opened_menus!=["catalog","tech"]: errors.append("Native guest menu transitions must each notify shared quests exactly once")
 	world.tech_panel._ins_buy.pressed.emit()
 	if world.tech_panel.money!=100.0 or requests!=[["upgrade",{"id":"hand_carry"}]]:
 		errors.append("Native research purchases must reach the host without spending guest money locally.")
@@ -94,8 +99,16 @@ func run(tree: SceneTree) -> Array[String]:
 		errors.append("Closing a guest session must restore native panel behavior.")
 	world.tech_panel._ins_buy.pressed.emit()
 	if world.tech_panel.money!=90.0 or requests.size()!=2: errors.append("Guest request hooks must be removed on teardown.")
+	# Resync frees the old scene before the menu bridge binds the replacement.
+	bridge.bind_world(world)
+	bridge.active = true
+	world.catalog_panel.set_open(true)
+	bridge._process(0.0)
+	world.free()
+	bridge.active = false
+	bridge._process(0.0)
+	if not bridge._open_states.is_empty(): errors.append("Freed resync panels retained menu-open state")
 	bridge.queue_free()
-	world.queue_free()
 	for action in ["build_catalog","tech_tree"]: InputMap.erase_action(action)
 	await tree.process_frame
 	return errors

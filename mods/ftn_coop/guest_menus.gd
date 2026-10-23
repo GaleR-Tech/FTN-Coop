@@ -9,6 +9,7 @@ var _panels: Array[Node] = []
 var _modes: Array[Dictionary] = []
 var _hooks: Array[Dictionary] = []
 var _disabled: Array[Dictionary] = []
+var _open_states := {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -140,6 +141,13 @@ func _card_input(event: InputEvent, original: Callable, id: String) -> void:
 func _process(_delta: float) -> void:
 	for panel in _panels:
 		if is_instance_valid(panel): panel.set_process_input(false)
+	for index in range(mini(2,_panels.size())):
+		if not is_instance_valid(_panels[index]):
+			_open_states.erase(index)
+			continue
+		var opened: bool = _panels[index].call("is_open")
+		if active and opened and not _open_states.get(index,false): action_requested.emit("menu_open",{"menu":"catalog" if index==0 else "tech"})
+		_open_states[index] = opened
 	for record in _disabled:
 		if is_instance_valid(record.node): record.node.disabled = true
 
@@ -162,6 +170,7 @@ func detach() -> void:
 	_modes.clear()
 	_disabled.clear()
 	_panels.clear()
+	_open_states.clear()
 	_world = null
 
 func _exit_tree() -> void:

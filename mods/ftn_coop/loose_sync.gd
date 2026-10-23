@@ -4,6 +4,8 @@ const LIMIT := 8192
 var current := {"ids":PackedInt32Array(),"kinds":PackedByteArray(),"poses":PackedFloat32Array(),"colors":PackedColorArray()}
 var _ids: Dictionary = {}
 var _next_id := 1
+var native_omissions := 0
+var last_native_omission := {}
 var _root: Node3D
 var _hay: MultiMesh
 var _needles: MultiMesh
@@ -100,12 +102,21 @@ func capture_sources(hay: Array, needles: Array) -> Dictionary:
 	for kind in range(2):
 		for body in hay if kind == 0 else needles:
 			if not is_instance_valid(body) or not body is Node3D or not body.is_inside_tree(): continue
+			var pose: Transform3D = body.global_transform
+			var tint: Variant = body.get_meta("tint",Color.WHITE) if kind==0 else Color.WHITE
+			var rejected := _native_rejection(pose,tint)
+			if not rejected.is_empty():
+				# Native transient/falling/fading bodies are not wire input. Omit an
+				# unrepresentable body without mutating it or ending everyone's game.
+				native_omissions+=1
+				last_native_omission={"reason":rejected,"kind":kind,"position":pose.origin,"basis":pose.basis,"tint_type":typeof(tint),"tint":tint if tint is Color else null}
+				continue
 			if not _ids.has(body):
 				if _next_id >= 2147483647: return _error("LOOSE_LIMIT")
 				_ids[body] = _next_id
 				_next_id += 1
 			seen[body] = true
-			records[_ids[body]] = {"kind":kind,"transform":body.global_transform,"color":body.get_meta("tint",Color.WHITE) if kind==0 else Color.WHITE}
+			records[_ids[body]] = {"kind":kind,"transform":pose,"color":tint}
 	for body in _ids.keys():
 		if not is_instance_valid(body) or not seen.has(body): _ids.erase(body)
 	var ids := PackedInt32Array()
@@ -125,6 +136,15 @@ func capture_sources(hay: Array, needles: Array) -> Dictionary:
 	var data := {"ids":ids,"kinds":kinds,"poses":poses,"colors":colors}
 	if not validate(data): return _error("LOOSE_INVALID")
 	return _ok(data)
+
+func _native_rejection(pose: Transform3D, tint: Variant) -> String:
+	if not tint is Color: return "TINT_TYPE"
+	for channel in [tint.r,tint.g,tint.b,tint.a]:
+		if not is_finite(channel) or channel<0.0 or channel>4.0: return "TINT_RANGE"
+	for axis in [pose.basis.x,pose.basis.y,pose.basis.z]:
+		if not axis.is_finite() or maxf(absf(axis.x),maxf(absf(axis.y),absf(axis.z)))>8.0: return "BASIS_RANGE"
+	if not pose.origin.is_finite() or maxf(absf(pose.origin.x),maxf(absf(pose.origin.y),absf(pose.origin.z)))>2048.0: return "POSITION_RANGE"
+	return ""
 
 func validate(data: Dictionary) -> bool:
 	if data.size() not in [3,4] or not data.get("ids") is PackedInt32Array or not data.get("kinds") is PackedByteArray or not data.get("poses") is PackedFloat32Array: return false

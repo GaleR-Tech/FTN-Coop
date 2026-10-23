@@ -14,6 +14,7 @@ var nodes: Dictionary = {}
 var verified: Dictionary = {}
 var guest_mode := false
 var actors: Dictionary = {}
+var _player_activity := {}
 var _previous_frame: Dictionary = {}
 var _save_origin: Dictionary = {}
 var _guest_directory := ""
@@ -49,6 +50,10 @@ var _belts_world_id := 0
 var _belts_epoch := 0
 var _belt_paths: Array[Node] = []
 var _belt_paths_world := 0
+var _guest_buildings_world := 0
+var _guest_buildings: Array = []
+var _guest_belt_spills: Node3D
+var last_apply_timings := {}
 
 func _clear_belt_records() -> void:
 	if not nodes.has("world"): return
@@ -100,8 +105,47 @@ func _render_belts(world_id: int, epoch: int) -> void:
 	# Clear only the guest run storage; clear_path() would destroy the belt
 	# geometry and spill its load. The host's simulation is never touched.
 	_clear_belt_records()
+	_clear_guest_belt_spills()
+	var before: Array = nodes.props.get("items").duplicate()
 	nodes.saves.set("_pending_belts",_guest_belts.duplicate(true))
 	nodes.world.call("_restore_belts")
+	# The native save importer may turn blocked cargo into new world bodies.
+	# Keep its fallback appearance, but isolate it from authoritative props and
+	# interactions. These meshes last only until the next conveyor refresh.
+	var after: Array = nodes.props.get("items").duplicate()
+	for body in after:
+		if not is_instance_valid(body) or body in before: continue
+		if not is_instance_valid(_guest_belt_spills):
+			_guest_belt_spills = Node3D.new()
+			_guest_belt_spills.name = "FtnGuestBeltFallbackVisuals"
+			_guest_belt_spills.process_mode = Node.PROCESS_MODE_DISABLED
+			nodes.world.add_child(_guest_belt_spills)
+		_copy_belt_fallback_meshes(body)
+		nodes.props.call("remove",body)
+
+func _clear_guest_belt_spills() -> void:
+	if is_instance_valid(_guest_belt_spills): _guest_belt_spills.free()
+	_guest_belt_spills = null
+
+func _copy_belt_fallback_meshes(source: Node) -> void:
+	var copy: GeometryInstance3D
+	if source is MeshInstance3D and source.mesh!=null:
+		var mesh := MeshInstance3D.new()
+		mesh.mesh = source.mesh
+		for index in range(source.mesh.get_surface_count()): mesh.set_surface_override_material(index,source.get_surface_override_material(index))
+		copy = mesh
+	elif source is MultiMeshInstance3D and source.multimesh!=null:
+		var mesh := MultiMeshInstance3D.new()
+		mesh.multimesh = source.multimesh
+		copy = mesh
+	if copy!=null:
+		copy.material_override = source.material_override
+		copy.material_overlay = source.material_overlay
+		copy.cast_shadow = source.cast_shadow
+		_guest_belt_spills.add_child(copy)
+		copy.global_transform = source.global_transform
+		copy.visible = source.is_visible_in_tree()
+	for child in source.get_children(): _copy_belt_fallback_meshes(child)
 
 func _tool_loads() -> RefCounted:
 	if _tool_load_state==null: _tool_load_state = load(MODULE_DIR+"/tool_load_state.gd").new()
@@ -312,6 +356,12 @@ func selected_build_id() -> String:
 func set_local_peer(peer: int) -> void:
 	_local_peer = peer
 
+func replication_players() -> Dictionary:
+	var players := actors.duplicate()
+	# Peer1 is the playable native host in the normal Steam mod.
+	if nodes.has("player") and is_instance_valid(nodes.player): players[1] = nodes.player
+	return players
+
 func _prop_module() -> RefCounted:
 	if _props_replica==null: _props_replica = load(MODULE_DIR+"/prop_replica.gd").new()
 	return _props_replica
@@ -471,6 +521,7 @@ func prepare_actor(peer_id: int) -> Dictionary:
 	return _ok(actor)
 
 func remove_actor(peer_id: int) -> void:
+	_player_activity.erase(peer_id)
 	_actor_serial += 1
 	_actor_epochs[peer_id] = _actor_serial
 	if not actors.has(peer_id): return
@@ -482,6 +533,37 @@ func remove_actor(peer_id: int) -> void:
 		if actor.get("carry") is Node: actor.get("carry").call("drop_all")
 		actor.queue_free()
 	actors.erase(peer_id)
+	pump_shared_activity()
+
+func observe_player_activity(peer: int, pose: Dictionary, elapsed: float) -> void:
+	if guest_mode or peer<=1 or not actors.get(peer) is CharacterBody3D or not is_instance_valid(actors[peer]): return
+	if not pose.get("position") is Vector3 or not pose.position.is_finite() or not is_finite(elapsed) or elapsed<=0 or elapsed>1.0: return
+	var actor: CharacterBody3D = actors[peer]
+	var velocity := Vector3.ZERO
+	if _player_activity.has(peer):
+		velocity = (pose.position-_player_activity[peer].position)/elapsed
+		# A spawn/teleport does not count as walking or sprinting.
+		if velocity.length()>10.5: velocity = Vector3.ZERO
+	actor.velocity = velocity
+	actor.set("_sprinting",Vector2(velocity.x,velocity.z).length()>5.0)
+	_player_activity[peer] = {"position":pose.position,"at":Time.get_ticks_msec()}
+	pump_shared_activity()
+
+func pump_shared_activity() -> void:
+	if guest_mode or not nodes.has("world") or not is_instance_valid(nodes.world): return
+	var missions: Variant = nodes.world.get("missions")
+	if not missions is Node: return
+	var selected: Node = nodes.get("player")
+	var best: float = selected.velocity.length_squared() if selected is CharacterBody3D else 0.0
+	for peer in _player_activity:
+		var actor: Variant = actors.get(peer)
+		if not actor is CharacterBody3D or not is_instance_valid(actor): continue
+		if Time.get_ticks_msec()-_player_activity[peer].at>500:
+			actor.velocity = Vector3.ZERO
+			actor.set("_sprinting",false)
+		var speed: float = actor.velocity.length_squared()
+		if speed>best: selected = actor; best = speed
+	if is_instance_valid(selected): missions.set("player",selected)
 
 func update_actor_pose(peer_id: int, pose: Dictionary) -> Dictionary:
 	if guest_mode or not actors.has(peer_id): return _error("ACTOR_NOT_READY")
@@ -502,13 +584,20 @@ func update_actor_pose(peer_id: int, pose: Dictionary) -> Dictionary:
 	return _ok()
 
 func apply_host_action(actor_id: int, kind: String, payload: Dictionary) -> Dictionary:
-	if kind not in ["dig","place","demolish","purchase","upgrade","needle_collect","item_interact","machine_config"]: return _error("ACTION_INVALID")
+	if kind not in ["dig","place","demolish","purchase","upgrade","needle_collect","item_interact","machine_config","menu_open"]: return _error("ACTION_INVALID")
 	if guest_mode: return _error("HOST_ONLY")
 	if not actors.has(actor_id) or not is_instance_valid(actors[actor_id]): return _error("ACTOR_NOT_READY")
 	var actor: Node = actors[actor_id]
 	if _previous_frame.is_empty(): _previous_frame = _live_frame()
 	var result := _perform_action(actor,kind,payload)
 	if not result.ok: return result
+	var missions: Node = nodes.world.get("missions")
+	if missions!=null and missions.has_method("_watch"):
+		var previous: Node = missions.get("player")
+		missions.set("player",actor)
+		# Observe native action counters without advancing the simulation clock.
+		missions.call("_watch",0.0)
+		missions.set("player",previous)
 	var frame := _live_frame()
 	var patch := _difference(_previous_frame,frame)
 	_previous_frame = frame
@@ -516,6 +605,33 @@ func apply_host_action(actor_id: int, kind: String, payload: Dictionary) -> Dict
 
 func _perform_action(actor: Node, kind: String, payload: Dictionary) -> Dictionary:
 	match kind:
+		"menu_open":
+			if payload.size()!=1 or payload.get("menu") not in ["tech","catalog"]: return _error("ACTION_INVALID")
+			var panel: Node = nodes.world.get("tech_panel" if payload.menu=="tech" else "catalog_panel")
+			var missions: Node = nodes.world.get("missions")
+			if panel==null or missions==null or not panel.has_method("set_open") or not panel.has_method("is_open") or not missions.has_method("_watch"): return _error("CAPABILITY_MISSING")
+			var was_open: bool = panel.call("is_open")
+			var tree: SceneTree = nodes.world.get_tree()
+			var paused := tree.paused
+			var mouse := Input.mouse_mode
+			var focused: Control = nodes.world.get_viewport().gui_get_focus_owner()
+			var menu_states := []
+			for name in ["tech_panel","catalog_panel"]:
+				var menu: Variant = nodes.world.get(name)
+				if menu is Node and menu.has_method("is_open") and menu.has_method("set_open"):
+					menu_states.append({"panel":menu,"opened":menu.call("is_open")})
+			var previous: Node = missions.get("player")
+			missions.set("player",actor)
+			panel.call("set_open",true)
+			missions.call("_watch",0.0)
+			panel.call("set_open",was_open)
+			for state in menu_states:
+				if state.panel.call("is_open")!=state.opened: state.panel.call("set_open",state.opened)
+			if is_instance_valid(focused): focused.grab_focus()
+			else: nodes.world.get_viewport().gui_release_focus()
+			missions.set("player",previous)
+			tree.paused = paused
+			Input.mouse_mode = mouse
 		"dig":
 			if not payload.get("pressed") is bool: return _error("ACTION_INVALID")
 			actor.call("_active_tool_primary",payload.pressed)
@@ -604,7 +720,7 @@ func _live_frame() -> Dictionary:
 	if not buildings.ok:
 		last_sync_error = buildings.code
 		return {}
-	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":buildings.value,"props":nodes.props.call("to_array").duplicate(true),"belts":_read_belts()}
+	var frame := {"state":nodes.state.call("to_dict").duplicate(true),"tech":nodes.tech.call("to_dict").duplicate(true),"heights":nodes.field.get("heights").duplicate(),"buildings":_guest_buildings.duplicate(true) if guest_mode and _guest_buildings_world==nodes.world.get_instance_id() else buildings.value,"props":nodes.props.call("to_array").duplicate(true),"belts":_read_belts()}
 	if guest_mode:
 		frame.held_props = _prop_module().held.duplicate(true)
 		if _prop_module().initialized:
@@ -614,8 +730,7 @@ func _live_frame() -> Dictionary:
 				return {}
 			frame.props = view
 	else:
-		var players := actors.duplicate()
-		if nodes.has("player"): players[1] = nodes.player
+		var players := replication_players()
 		frame.held_props = _prop_module().capture_held(nodes.props,players)
 	var settings := read_shared_settings()
 	if not settings.ok:
@@ -647,8 +762,7 @@ func _live_frame() -> Dictionary:
 			frame.held_loose = _loose_module().held.duplicate(true)
 			frame.tool_loads = _tool_loads().current.duplicate(true)
 		else:
-			var players := actors.duplicate()
-			if nodes.has("player"): players[1] = nodes.player
+			var players := replication_players()
 			frame.held_loose = _loose_module().capture_holds(players)
 			frame.tool_loads = _tool_loads().capture(players)
 	return frame
@@ -662,6 +776,9 @@ func _difference(before: Dictionary, after: Dictionary) -> Dictionary:
 	var patch := {}
 	for key in after:
 		if before.get(key) == after[key]: continue
+		if key=="buildings" and before.get(key) is Array and before[key].size()==after[key].size():
+			patch.buildings_delta = load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new().difference(before[key],after[key])
+			continue
 		if key=="state" and before.get(key) is Dictionary and before[key].size()==after[key].size():
 			var changes := {}
 			for field in after[key]:
@@ -706,6 +823,7 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 		nodes.saves.set("block_save",true)
 		guest_mode = true
 		if has_world:
+			prepare_guest_presentation()
 			nodes.world.set("block_save",true)
 			nodes.world.process_mode = Node.PROCESS_MODE_DISABLED
 			_hide_native_loose(true)
@@ -735,6 +853,9 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	_guest_quest.clear()
 	_guest_countdown.clear()
 	_guest_belts.clear()
+	_guest_buildings.clear()
+	_clear_guest_belt_spills()
+	_guest_buildings_world = 0
 	_guest_belts_ready = false
 	_guest_belts_world = 0
 	_belts_pending = false
@@ -749,6 +870,15 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	_quest_index = -1
 	guest_mode = false
 	return _ok()
+
+func prepare_guest_presentation() -> void:
+	if not nodes.has("world") or not is_instance_valid(nodes.world) or nodes.world.get("_built")!=true: return
+	var intro: Variant = nodes.world.get("intro")
+	if intro is Node and intro.has_method("abort"): intro.call("abort")
+	# Only presentation timers run on guests; native world simulation stays off.
+	for role in ["quests","mission_cue"]:
+		var panel: Variant = nodes.world.get(role)
+		if panel is Node: panel.process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _prepare_guest_field() -> Dictionary:
 	if not nodes.has("field"): return _ok()
@@ -924,12 +1054,50 @@ func _snapshot_valid(state: Dictionary) -> bool:
 	if diameter*diameter > 2097152 or state.heights.size()!=diameter*diameter: return false
 	for height in state.heights:
 		if not is_finite(height) or absf(height)>8192.0: return false
-	return _safe_native_data(state,0)
+	return _snapshot_records_valid(state) and _safe_native_data(state,0)
+
+func _snapshot_records_valid(state: Dictionary) -> bool:
+	# Validate before either native loader sees the data, including offline
+	# imports and recovery candidates. Autoload schemas exist before the world.
+	for role in ["state","tech"]:
+		if not nodes.has(role) or not nodes[role].has_method("to_dict"): return false
+		var template: Dictionary = nodes[role].call("to_dict")
+		if template.is_empty() or state[role].size()!=template.size(): return false
+		for key in template:
+			if not state[role].has(key) or typeof(state[role][key])!=typeof(template[key]): return false
+	for row in state.props:
+		if not row is Dictionary or not row.get("id") is String or row.id.is_empty() or row.id.length()>128 or not row.get("state") is Dictionary or not row.get("xform") is Transform3D: return false
+	for row in state.buildings:
+		if not row is Dictionary or not row.get("type") is String or row.type.is_empty() or row.type.length()>128: return false
+		if row.has("position"):
+			if not row.position is Vector3: return false
+		elif not row.get("a") is Vector3 or not row.get("b") is Vector3: return false
+		for key in ["a","b","seat","drop","zone"]:
+			if row.has(key) and not row[key] is Vector3: return false
+		for key in ["yaw","pitch","rise","paid","fuel","rate","resume","port_r","port_reach","zone_r"]:
+			if row.has(key) and typeof(row[key]) not in [TYPE_INT,TYPE_FLOAT]: return false
+	for key in state.belts:
+		if key not in ["paths","lifts","stairs"] or not state.belts[key] is Array or state.belts[key].size()>32768: return false
+		for row in state.belts[key]:
+			if not row is Dictionary or row.is_empty(): return false
+			if key=="paths" and (not row.get("a") is Vector3 or not row.get("b") is Vector3 or not row.get("records") is Array): return false
+			if row.has("records"):
+				if not row.records is Array or row.records.size()>65536: return false
+				for cargo in row.records:
+					if not cargo is Dictionary: return false
+					for field in ["kind","strands","needle"]:
+						if typeof(cargo.get(field))!=TYPE_INT: return false
+					for field in ["reach","side","lift","s","speed"]:
+						if typeof(cargo.get(field)) not in [TYPE_INT,TYPE_FLOAT]: return false
+					if not cargo.get("state") is Dictionary or not cargo.get("xform") is Transform3D: return false
+	return true
 
 func apply_confirmed_event(event: Dictionary) -> Dictionary:
 	if not guest_mode: return _error("HOST_ONLY")
 	if not event.get("patch") is Dictionary or not _patch_valid(event.patch): return _error("SNAPSHOT_INVALID")
 	var patch: Dictionary = event.patch
+	var timings := {}
+	var stamp := Time.get_ticks_usec()
 	# Validate the whole update first; the guest world cannot simulate meanwhile.
 	if patch.has("settings"):
 		var settings := apply_shared_settings(patch.settings)
@@ -944,7 +1112,9 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		_guest_quest = patch.quest.duplicate(true)
 		_refresh_guest_quests(nodes.state.call("to_dict"))
 	if patch.has("countdown"): _apply_countdown(patch.countdown)
-	if patch.has("tech"): nodes.tech.call("from_dict",patch.tech,false)
+	if patch.has("tech"): apply_guest_technology(patch.tech)
+	timings.state_and_ui = Time.get_ticks_usec()-stamp
+	stamp = Time.get_ticks_usec()
 	var moved := PackedInt32Array()
 	if patch.has("heights"):
 		var previous: PackedFloat32Array = nodes.field.get("heights")
@@ -959,23 +1129,27 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 	if not moved.is_empty():
 		nodes.field.call("_dirty_moved",moved)
 		nodes.field.call("_flush_dirty")
+	timings.field = Time.get_ticks_usec()-stamp
+	stamp = Time.get_ticks_usec()
 	if patch.has("buildings"):
-		_clear_belt_records()
-		_belt_paths.clear()
-		_belt_paths_world = 0
-		nodes.builds.call("clear")
-		var slice := int(nodes.builds.get("restore_slice_usec"))
-		nodes.builds.set("restore_slice_usec",0)
-		nodes.builds.call("from_array",patch.buildings)
-		nodes.builds.set("restore_slice_usec",slice)
+		var restored_builds: Dictionary = apply_guest_buildings(patch.buildings)
+		if not restored_builds.ok: return restored_builds
+	elif patch.has("buildings_delta"):
+		var expanded: Dictionary = load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new().expand(_guest_buildings,patch.buildings_delta)
+		var restored_builds: Dictionary = apply_guest_buildings(expanded.value)
+		if not restored_builds.ok: return restored_builds
+	timings.buildings = Time.get_ticks_usec()-stamp
+	stamp = Time.get_ticks_usec()
 	if patch.has("props"):
 		_prop_module().apply_records(nodes.props,patch.props)
 	if patch.has("held_props"): _prop_module().accept_held(nodes.props,patch.held_props)
+	timings.props = Time.get_ticks_usec()-stamp
+	stamp = Time.get_ticks_usec()
 	if patch.has("belts"):
 		_guest_belts = patch.belts.duplicate(true)
 		_guest_belts_ready = true
 		_guest_belts_world = nodes.world.get_instance_id()
-	if _guest_belts_ready and (patch.has("belts") or patch.has("buildings")): _queue_belt_render()
+	if _guest_belts_ready and (patch.has("belts") or patch.has("buildings") or patch.has("buildings_delta")): _queue_belt_render()
 	if patch.has("loose"):
 		_hide_native_loose(true)
 		var loose_result: Dictionary = _loose_module().apply(patch.loose,nodes.world.get_tree().root)
@@ -986,7 +1160,39 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		if not loose_result.ok: return loose_result
 	if patch.has("held_loose"): _loose_module().accept_holds(patch.held_loose)
 	if patch.has("tool_loads"): _tool_loads().accept(patch.tool_loads)
+	timings.cargo_and_loose = Time.get_ticks_usec()-stamp
+	last_apply_timings = timings
 	return _ok()
+
+func apply_guest_buildings(records: Array) -> Dictionary:
+	var world_id: int = nodes.world.get_instance_id()
+	if _guest_buildings_world!=world_id:
+		if _build_capture==null: _build_capture = load(get_script().resource_path.get_base_dir()+"/live_build_capture.gd").new()
+		var current: Dictionary = _build_capture.capture(nodes.builds)
+		if not current.ok: return current
+		_guest_buildings = current.value
+		_guest_buildings_world = world_id
+	if _guest_buildings==records: return _ok()
+	var replica: RefCounted = load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new()
+	if replica.layout(_guest_buildings)==replica.layout(records) and replica.update(nodes.builds,_guest_buildings,records):
+		_guest_buildings = records.duplicate(true)
+		return _ok()
+	_clear_belt_records()
+	_belt_paths.clear()
+	_belt_paths_world = 0
+	nodes.builds.call("clear")
+	var slice := int(nodes.builds.get("restore_slice_usec"))
+	nodes.builds.set("restore_slice_usec",0)
+	nodes.builds.call("from_array",records)
+	nodes.builds.set("restore_slice_usec",slice)
+	_guest_buildings = records.duplicate(true)
+	return _ok()
+
+func apply_guest_technology(values: Dictionary) -> void:
+	# Native technology restoration rebuilds dependent machinery. The scene
+	# loader already restored the baseline, and catch-up often repeats it.
+	if nodes.tech.call("to_dict")==values: return
+	nodes.tech.call("from_dict",values,false)
 
 func _countdown_node() -> Variant:
 	if not nodes.has("world") or not is_instance_valid(nodes.world): return null
@@ -1100,14 +1306,17 @@ func _patch_valid(patch: Dictionary) -> bool:
 	if patch.has("state_delta") and (not patch.state_delta is Dictionary or patch.has("state")): return false
 	if patch.has("loose_delta") and (not patch.loose_delta is Dictionary or patch.has("loose")): return false
 	if patch.has("props") and not patch.props is Array: return false
+	if patch.has("buildings_delta"):
+		if patch.has("buildings") or _guest_buildings_world!=nodes.world.get_instance_id(): return false
+		if not load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new().expand(_guest_buildings,patch.buildings_delta).ok: return false
 	# Quest text is display-only, so separators such as "3 / 5" are safe.
 	# It never enters a native resource or save loader.
 	var native := patch.duplicate()
 	native.erase("quest")
 	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","state_delta","tech","heights","field","buildings","props","held_props","belts","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
-		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","props":"props","held_props":"props","belts":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
+		if key not in ["state","state_delta","tech","heights","field","buildings","buildings_delta","props","held_props","belts","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
+		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","buildings_delta":"builds","props":"props","held_props":"props","belts":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
 		if not nodes.has(role): return false
 		if key=="countdown":
 			if not patch[key] is Dictionary or patch[key].size()!=1 or typeof(patch[key].get("seconds"))!=TYPE_INT or patch[key].seconds<0 or patch[key].seconds>86400: return false
@@ -1162,7 +1371,7 @@ func _patch_valid(patch: Dictionary) -> bool:
 				loose = {"ids":_loose_module().next_ids(patch.loose_delta)}
 			if not loose is Dictionary or not loose.get("ids") is PackedInt32Array or not _loose_module().validate_holds(patch.held_loose,loose.ids): return false
 	# Local calls and tests receive the same object-free data restrictions as wire data.
-	var codec: RefCounted = load(MODULE_DIR+"/value_codec.gd").new()
+	var codec: RefCounted = load(get_script().resource_path.get_base_dir()+"/value_codec.gd").new()
 	return codec.encode(patch,64*1024*1024).ok
 
 func _safe_native_data(value: Variant, depth: int, checked_strings: Dictionary={}) -> bool:

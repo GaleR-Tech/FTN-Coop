@@ -1,5 +1,25 @@
 # Changelog / Änderungen
 
+## 0.7.0 · 2026-10-23
+
+### English
+
+- Backported the proven shared server improvements to the normal Steam host/guest mod, retaining the playable host and four total players.
+- Reuse native machine geometry, unchanged research and matching props; send changed building rows instead of entire factory inventories.
+- Replace load-time event history with one current catch-up frame and require the final readiness acknowledgement before guest actions.
+- Shared native quests observe guest movement, sprinting, actions and opened build/research menus while preserving host controls, menus and focus.
+- Keep conveyor fallback visuals outside native props, run guest HUD timers, and omit out-of-range native loose bodies without disconnecting the lobby.
+- Install 0.7.0 on every participant and restart. Packages are prepared locally; Steam Internet latency and graphical Linux/Proton still need affected-system testing.
+
+### Deutsch
+
+- Die bewährten gemeinsamen Serververbesserungen wurden in die normale Steam-Mod übertragen. Der Host bleibt spielbar; insgesamt passen vier Spieler in die Sitzung.
+- Native Maschinengeometrie, unveränderte Forschung und passende Gegenstände werden weiterverwendet. Geänderte Gebäudezeilen ersetzen die Übertragung kompletter Fabriklisten.
+- Ein aktueller Weltabgleich ersetzt den während des Ladens angesammelten Verlauf. Gastaktionen werden erst nach der abschließenden Bereitschaftsbestätigung freigegeben.
+- Gemeinsame native Quests berücksichtigen Bewegung, Sprint, Aktionen und geöffnete Bau-/Forschungsmenüs der Gäste. Steuerung, Menüs und Eingabefokus des Hosts bleiben erhalten.
+- Band-Ersatzdarstellungen bleiben außerhalb echter Gegenstände, Gastanzeigen laufen weiter und entfernte native Physikobjekte beenden nicht mehr den gesamten Abgleich.
+- Alle Teilnehmer müssen 0.7.0 installieren und neu starten. Die Pakete liegen lokal bereit; Steam-Internetlatenz und grafisches Linux/Proton brauchen weiterhin Tests auf den betroffenen Systemen.
+
 ## 0.6.3 · 2026-10-22
 
 ### English

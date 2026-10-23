@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('all', 'guest_menus', 'shared_tools', 'prop_replica', 'collaboration_ui', 'rejoin', 'update_checker', 'presets', 'collaboration', 'shared_settings', 'mod_versions', 'localization', 'script_load', 'runtime_probe', 'game_adapter', 'input_bridge', 'session', 'protocol', 'snapshot_transfer', 'world_sync', 'loose_sync', 'network_controller', 'network_recovery', 'actor_lifecycle', 'local_transport', 'native_diagnostics', 'presence_ui', 'guest_movement', 'guest_controls', 'save_session', 'save_adapter')]
+    [ValidateSet('all', 'port_host_quests', 'port_build_reuse', 'port_prop_updates', 'port_tech_reuse', 'port_belt_visual_scope', 'port_loose_capture_scope', 'port_guest_intro', 'port_catch_up', 'guest_menus', 'shared_tools', 'prop_replica', 'collaboration_ui', 'rejoin', 'update_checker', 'presets', 'collaboration', 'shared_settings', 'mod_versions', 'localization', 'script_load', 'runtime_probe', 'game_adapter', 'input_bridge', 'session', 'protocol', 'snapshot_transfer', 'world_sync', 'loose_sync', 'network_controller', 'network_recovery', 'actor_lifecycle', 'local_transport', 'native_diagnostics', 'presence_ui', 'guest_movement', 'guest_controls', 'save_session', 'save_adapter')]
     [string]$Suite = 'all',
     [string]$TestScript = 'res://tests/runner.gd'
 )

@@ -53,6 +53,7 @@ var _last_build_sequence := 0
 var _equipment_epochs: Dictionary = {}
 var _pose_serial := 0
 var _last_pose_serial: Dictionary = {}
+var _activity_at: Dictionary = {}
 var _queued_poses: Dictionary = {}
 
 func _ready() -> void:
@@ -138,6 +139,7 @@ func leave() -> void:
 	_equipment_epochs.clear()
 	_pose_serial = 0
 	_last_pose_serial.clear()
+	_activity_at.clear()
 	_sync_wait = 0.0
 	_receiver.cancel()
 	load_progress.emit("idle",0,0)
@@ -203,6 +205,7 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 
 func _process(delta: float) -> void:
 	if session==null or _leaving: return
+	if session.is_host and _adapter.has_method("pump_shared_activity"): _adapter.pump_shared_activity()
 	_markers.advance(delta)
 	_status_due += delta
 	if session.is_host and session.state!=session.State.OFFLINE and _status_due>=3.0:
@@ -404,8 +407,12 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 			if applied.ok: _sync_wait = 0.0
 		"WORLD_READY":
 			if body.get("stage")=="caught_up" and body.get("revision")==world_sync.revision:
+				if session.state!=session.State.SYNCING or not _baseline_received or _loading: return
+				var acknowledged := _queue(1,"WORLD_READY",{"stage":"playing","revision":body.revision})
+				if not acknowledged.ok: _fail(acknowledged.code); return
 				_resync_attempts = 0
 				session.mark_world_ready(_transport.local_peer_id())
+				if _transport.has_method("set_loading"): _transport.set_loading(1,false)
 		"ROSTER": session.accept_welcome(1,{"session_id":session.session_id,"player_id":_transport.local_peer_id(),"roster":body.get("roster"),"mod_version":_mod_version})
 		"POSE":
 			if typeof(body.get("peer"))==TYPE_INT and body.get("pose") is Dictionary and session.roster.has(body.peer) and _accept_pose_serial(peer,body): pose_received.emit(body.peer,body.pose)
@@ -438,9 +445,16 @@ func _update_actor_pose(peer: int, pose: Dictionary) -> Dictionary:
 	# Movement uses a separate unreliable channel. A late packet must not undo
 	# a host-confirmed purchase/drop while its result is reaching the guest.
 	if epoch<int(_equipment_epochs.get(peer,0)): confirmed.erase("tool")
-	return _adapter.update_actor_pose(peer,confirmed)
+	var result: Dictionary = _adapter.update_actor_pose(peer,confirmed)
+	if result.ok and _adapter.has_method("observe_player_activity"):
+		var now := Time.get_ticks_msec()
+		var elapsed := clampf((now-int(_activity_at.get(peer,now-50)))/1000.0,0.001,1.0)
+		_activity_at[peer] = now
+		_adapter.observe_player_activity(peer,confirmed,elapsed)
+	return result
 
 func _start_world(peer: int) -> void:
+	if _transport.has_method("set_loading"): _transport.set_loading(peer,true)
 	var epoch := _epoch
 	var peer_epoch: int = _peer_epochs.get(peer,0)
 	_preparing[peer] = peer_epoch
@@ -484,6 +498,18 @@ func _on_transfer_progress(received: int, total: int) -> void:
 
 func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	if session.is_host: return
+	if state.get("mode")=="catch_up":
+		if session.state!=session.State.SYNCING or not _baseline_received or _loading: return
+		if typeof(state.get("base_revision"))!=TYPE_INT or state.base_revision!=world_sync.revision or revision<=world_sync.revision: return
+		var frame: Variant = state.get("frame")
+		if not frame is Dictionary: return
+		for key in ["state","heights","props","buildings","belts","tech","settings"]:
+			if not frame.has(key): return
+		var applied: Dictionary = _adapter.apply_confirmed_event({"patch":frame})
+		if not applied.ok: _request_resync(applied.code); return
+		world_sync.accept_baseline(revision)
+		_sync_wait = 0.0
+		return
 	if state.get("mode")=="event" and state.get("event") is Dictionary:
 		if not _baseline_received or _loading: return
 		world_sync.accept_event(1,state.event)
@@ -517,25 +543,45 @@ func _on_snapshot_completed(state: Dictionary, revision: int) -> void:
 	_queue(1,"WORLD_READY",{"stage":"baseline","revision":revision})
 
 func _finish_world(peer: int, body: Dictionary) -> void:
+	if _pending.has(peer) and _pending[peer].get("phase")=="catching_up":
+		if body.get("stage")!="playing" or body.get("revision")!=_pending[peer].revision: return
+		_pending[peer].transfer.queue_free()
+		_pending.erase(peer)
+		world_sync.set_ready(peer,true)
+		_world_retries.erase(peer)
+		session.mark_world_ready(peer)
+		if _transport.has_method("set_loading"): _transport.set_loading(peer,false)
+		_publish_collaboration()
+		return
 	if not _pending.has(peer) or body.get("stage")!="baseline" or body.get("revision")!=_pending[peer].revision: return
 	var record: Dictionary = _pending[peer]
-	_pending.erase(peer)
-	for event in record.transfer.buffered_events(): _queue_event(peer,event)
-	record.transfer.queue_free()
-	world_sync.set_ready(peer,true)
-	_world_retries.erase(peer)
-	session.mark_world_ready(peer)
+	# Replace the accumulated load-time history with one current authoritative
+	# frame. Reliable ordering places subsequent live events behind this overlay;
+	# the client applies it to the already loaded world without a scene reload.
+	world_sync.poll()
+	world_sync.checkpoint()
+	var frame: Dictionary = _adapter._live_frame()
+	if frame.is_empty(): _fail("WORLD_NOT_READY",peer); return
+	var transfer: Node = load(get_script().resource_path.get_base_dir()+"/snapshot_transfer.gd").new()
+	var begun: Dictionary = transfer.begin({"mode":"catch_up","base_revision":record.revision,"frame":frame},session.session_id,world_sync.revision)
+	transfer.free()
+	if not begun.ok: _fail(begun.code,peer); return
+	for packet in begun.value.frames:
+		var queued: Dictionary = _queue(peer,packet.kind,packet)
+		if not queued.ok: _fail(queued.code,peer); return
+	_pending[peer].phase = "catching_up"
+	_pending[peer].revision = world_sync.revision
+	_pending[peer].age = 0.0
 	_queue(peer,"WORLD_READY",{"stage":"caught_up","revision":world_sync.revision})
-	_publish_collaboration()
 
 func _on_confirmed(event: Dictionary) -> void:
 	var prepared := {}
 	for peer in session.roster.keys():
 		if peer==1 or not session.roster.has(peer) or not session.roster[peer].accepted: continue
-		if _pending.has(peer):
-			var buffered: Dictionary = _pending[peer].transfer.buffer_event(event)
-			if not buffered.ok: _fail(buffered.code,peer)
-		elif session.roster[peer].state=="playing":
+		if _pending.has(peer) and _pending[peer].get("phase")!="catching_up":
+			# _finish_world sends one current frame after native loading completes.
+			continue
+		elif session.roster[peer].state=="playing" or (_pending.has(peer) and _pending[peer].get("phase")=="catching_up"):
 			if prepared.is_empty(): prepared = _prepare_event(event)
 			_queue_event(peer,event,prepared)
 
@@ -565,6 +611,7 @@ func _queue_event(peer: int, event: Dictionary, prepared: Dictionary={}) -> void
 
 func _request_resync(reason: String="") -> void:
 	if _leaving or session.is_host or _resync_pending or connection_id.is_empty(): return
+	if _transport.has_method("set_loading"): _transport.set_loading(1,true)
 	if reason.is_empty(): reason = world_sync.last_resync_reason
 	recovery_reason = reason if not reason.is_empty() else "UNKNOWN"
 	print("[FTN-Coop] World resynchronization requested: "+(reason if not reason.is_empty() else "UNKNOWN"))
@@ -605,6 +652,7 @@ func _on_disconnected(peer: int) -> void:
 	_markers.remove_peer(peer)
 	_status.remove_peer(peer)
 	_peer_positions.erase(peer)
+	_activity_at.erase(peer)
 	_peer_stages.erase(peer)
 	_status_announced_at.erase(peer)
 	_preparing.erase(peer)

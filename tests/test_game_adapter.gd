@@ -137,7 +137,11 @@ func run(tree: SceneTree) -> Array[String]:
 	await guest_visual_checks(tree,errors)
 	guest_field_checks(errors)
 	guest_clock_checks(errors)
-	var snapshot := {"version":1,"state":{},"heights":PackedFloat32Array([0.0,0.0,0.0,0.0]),"player":Transform3D.IDENTITY,"buildings":[],"props":[],"belts":{},"tech":{},"cell":2.0,"extent":1.0}
+	var schema: Script = load("res://tests/fixtures/replica_boundary.gd")
+	var state_schema: Node = schema.State.new()
+	var tech_schema: Node = schema.Tech.new()
+	fresh.nodes={"state":state_schema,"tech":tech_schema}
+	var snapshot := {"version":1,"state":state_schema.to_dict(),"heights":PackedFloat32Array([0.0,0.0,0.0,0.0]),"player":Transform3D.IDENTITY,"buildings":[],"props":[],"belts":{},"tech":tech_schema.to_dict(),"cell":2.0,"extent":1.0}
 	if not fresh._snapshot_valid(snapshot): errors.append("A correctly sized native grid must remain valid.")
 	unsafe_snapshot_grid_checks(fresh,snapshot,errors)
 	var unsafe_snapshot := snapshot.duplicate(true)
@@ -146,6 +150,11 @@ func run(tree: SceneTree) -> Array[String]:
 	unsafe_snapshot = snapshot.duplicate(true)
 	unsafe_snapshot.cell = 0.0
 	if fresh._snapshot_valid(unsafe_snapshot): errors.append("Invalid native world dimensions must fail before native world allocation.")
+	for field in ["state","tech","props","buildings"]:
+		unsafe_snapshot=snapshot.duplicate(true)
+		unsafe_snapshot[field]={} if field in ["state","tech"] else [null]
+		if fresh._snapshot_valid(unsafe_snapshot): errors.append("Malformed native snapshot records must be rejected before loading: "+field)
+	state_schema.free();tech_schema.free()
 	return errors
 
 class BeltRun extends RefCounted:
@@ -193,16 +202,20 @@ class BeltView extends Node:
 class BeltSave extends Node:
 	var _pending_belts: Dictionary = {}
 
+class BeltProps extends Node:
+	var items: Array = []
+
 func belt_replica_checks(tree: SceneTree, errors: Array[String]) -> void:
 	var adapter: RefCounted = load("res://mods/ftn_coop/game_adapter.gd").new()
 	if not adapter.has_method("_read_belts"):
 		errors.append("Guest belt state must retain the host's exact records despite normalization by the native visual importer.")
 		return
 	var view := BeltView.new()
+	var props := BeltProps.new();view.add_child(props)
 	var saves := BeltSave.new()
 	view.saves = saves
 	tree.root.add_child(view)
-	adapter.nodes = {"world":view,"saves":saves,"builds":view.builds}
+	adapter.nodes = {"world":view,"saves":saves,"builds":view.builds,"props":props}
 	adapter.guest_mode = true
 	var first := {"paths":[{"records":[{"strands":97,"s":0.125}]}],"stairs":[{"rows":[{"strands":17,"s":0.25}]}],"lifts":[{"rows":[{"strands":22,"s":0.5}]}]}
 	var latest := first.duplicate(true)

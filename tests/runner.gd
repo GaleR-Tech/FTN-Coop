@@ -1,6 +1,15 @@
 extends SceneTree
 
 const SUITES := {
+	"port_host_quests": "res://tests/test_port_host_quests.gd",
+	"port_build_reuse": "res://tests/test_port_build_reuse.gd",
+	"port_prop_updates": "res://tests/test_port_prop_updates.gd",
+	"port_tech_reuse": "res://tests/test_port_tech_reuse.gd",
+	"port_belt_visual_scope": "res://tests/test_port_belt_visual_scope.gd",
+	"port_loose_capture_scope": "res://tests/test_port_loose_capture_scope.gd",
+	"port_guest_intro": "res://tests/test_port_guest_intro.gd",
+	"port_catch_up": "res://tests/test_port_catch_up.gd",
+
 	"prop_replica": "res://tests/test_prop_replica.gd",
 	"shared_tools": "res://tests/test_shared_tools.gd",
 	"guest_menus": "res://tests/test_guest_menus.gd",

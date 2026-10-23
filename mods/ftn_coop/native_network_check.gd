@@ -17,6 +17,8 @@ var _sample_history: Dictionary = {}
 var _building_history: Dictionary = {}
 var _state_roundtrip: Dictionary = {}
 var _load_history: Dictionary = {}
+var _machine_layout := ""
+var _machine_ids := []
 var _results: Dictionary = {}
 var _last_revision := -1
 var _revision_frames := 0
@@ -56,7 +58,7 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	_directory = OS.get_environment("FTN_COOP_TEST_OUTPUT").replace("\\","/")
 	if _directory.is_empty(): _directory = "user://ftn_coop/tests/"+run_id
 	DirAccess.make_dir_recursive_absolute(_directory)
-	get_tree().root.title = "FTN Koop Test · "+_role+" "+str(_index)
+	get_tree().root.title = "FTN Koop Test Ã‚Â· "+_role+" "+str(_index)
 	_adapter = load(base+"/game_adapter.gd").new()
 	_adapter.bind(get_tree().root)
 	if not _adapter.nodes.has("world") or not _adapter.nodes.has("saves"): return _finish("WORLD_NOT_READY")
@@ -105,12 +107,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.6.3")
+		_runtime.configure(_adapter,transport,"25963876","0.7.0")
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.6.3")
+		_network.configure(transport,_adapter,"25963876","0.7.0")
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return
@@ -263,7 +265,9 @@ func _process(delta: float) -> void:
 	if _finished or _network==null or _adapter==null or _directory.is_empty(): return
 	if _role=="guest" and _presence_check and _network.session.state==_network.session.State.PLAYING:
 		_check_guest_load_visuals()
-		if _revision_frames>=2 and _network.world_sync.revision==_last_revision: _check_guest_belt_view()
+		if _revision_frames>=2 and _network.world_sync.revision==_last_revision:
+			_check_guest_belt_view()
+			_check_guest_native_buildings()
 	if _role=="guest" and _network.session.state==_network.session.State.PLAYING and _adapter.nodes.cfg.get("prop_cap")==330:
 		_checks.settings_live = true
 		var expected := TEST_SETTINGS.duplicate(true)
@@ -538,6 +542,8 @@ func _extra_actions() -> void:
 			await _check_arm_capture()
 			await _check_power_tool(actor,peer)
 			await _check_build_steps(actor)
+			await _check_machine_replica(scanner)
+			await _check_shared_quests(actor,peer)
 			await _check_loaded_departure(actor,peer)
 	if _presence_check:
 		_runtime.ui.set_shared_settings(_adapter.read_shared_settings().value)
@@ -581,7 +587,7 @@ func _extra_actions() -> void:
 		_fatal = "LOADED_DEPARTURE_FAILED"
 		_done = false
 	if _presence_check:
-		for key in ["arm_live_capture","arm_belt_delivery"]:
+		for key in ["arm_live_capture","arm_belt_delivery","native_guest_quests","quest_host_eligible","quest_host_ui_preserved","native_machine_witnesses"]:
 			if not _checks.get(key,false):
 				_fatal = "CHECK_"+key.to_upper()
 				_done = false
@@ -799,12 +805,27 @@ func _check_power_tool(actor: Node3D, peer: int) -> void:
 	_checks.power_tool = actor.get("current_tool")
 	actor.global_position = Vector3(6,float(_adapter.nodes.field.call("top_at",6.0,4.0))+0.2,4)
 	actor.call("set_look",0.0,-1.35)
+	actor.velocity = Vector3.ZERO
+	actor.set("_sprinting",false)
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Native tool aim is cached on physics frames; this diagnostic teleports.
+	for frame in range(2): await get_tree().physics_frame
 	var before := float(_adapter.nodes.state.get("hay_dug"))
 	var pressed: Dictionary = _network.world_sync.submit_action(peer,2001,"dig",{"pressed":true})
 	await get_tree().create_timer(0.6).timeout
 	_checks.power_dig = bought.ok and pressed.ok and int(actor.get("current_tool"))==1 and float(_adapter.nodes.state.get("hay_dug"))>before
 	var shovel: Node = actor.get("shovel")
 	_checks.power_processing = {"can_process":shovel.can_process(),"physics":shovel.is_physics_processing(),"mode":shovel.process_mode,"strands":shovel.call("carried_strands")}
+	_checks.power_replica = {"peer":peer,"loads":_adapter._tool_loads().capture(_adapter.replication_players())}
+	# The scripted host controls the remote pawn here. Keep the load until its
+	# real guest acknowledges rendering, rather than racing a brief scoop/drop.
+	var witness := ""
+	for row in _network.session.roster.values():
+		if row.id==peer: witness = "guest-"+String(row.name).get_slice(" ",1)
+	var load_deadline := Time.get_ticks_msec()+15000
+	while not _read(witness).get("checks",{}).get("tool_straw_local",false) and Time.get_ticks_msec()<load_deadline:
+		_network.world_sync.poll()
+		await get_tree().create_timer(0.1).timeout
 	var positions := {}
 	for body in _adapter.nodes.live.get("_active"):
 		if body is Node3D and is_instance_valid(body) and body.is_inside_tree(): positions[body] = body.global_position
@@ -923,3 +944,115 @@ func _finish(code: String) -> Dictionary:
 	_fatal = code
 	_write("FAIL")
 	return {"ok":false,"code":code,"value":null}
+
+func _check_shared_quests(actor: CharacterBody3D, peer: int) -> void:
+	_stage = "native_quests"
+	var missions: Node = _adapter.nodes.world.get("missions")
+	var state: Node = _adapter.nodes.state
+	var host: CharacterBody3D = _adapter.nodes.player
+	_checks.quest_start = state.call("to_dict").get("mission_index")
+	_checks.quest_yard = _adapter.nodes.world.get("quests").get("in_yard").call()
+	# Let the native lesson text complete its ordinary display/read timer.
+	await get_tree().create_timer(10.0).timeout
+	actor.call("_set_tool",0,true)
+	actor.global_position = Vector3(-4,float(_adapter.nodes.field.call("top_at",-4.0,3.0))+0.2,3)
+	actor.call("set_look",0.0,-1.35)
+	for frame in range(2): await get_tree().physics_frame
+	_network.world_sync.submit_action(peer,3000,"dig",{"pressed":true})
+	_network.world_sync.submit_action(peer,3001,"dig",{"pressed":false})
+	_network.world_sync.submit_action(peer,3002,"item_interact",{"operation":"secondary"})
+	await get_tree().create_timer(2.0).timeout
+	_checks.quest_after_hay = state.call("to_dict").get("mission_index")
+	await get_tree().create_timer(5.0).timeout
+	var moving := Vector3(12,0,12)
+	_adapter.observe_player_activity(peer,{"position":moving},0.1)
+	# A human continues moving after the walking lesson becomes the sprint
+	# lesson. Keep accepted movement flowing across both native read timers.
+	var running_deadline := Time.get_ticks_msec()+40000
+	var direction := -1.0
+	while int(state.call("to_dict").get("mission_index",0))<4 and Time.get_ticks_msec()<running_deadline:
+		if absf(moving.z)>16.0: direction = -direction
+		moving.z += direction*0.7
+		var pose := {"position":moving,"rotation":Vector3.ZERO,"tool":0}
+		_adapter.update_actor_pose(peer,pose)
+		_adapter.observe_player_activity(peer,pose,0.1)
+		await get_tree().create_timer(0.1).timeout
+	await get_tree().create_timer(2.0).timeout
+	_checks.quest_after_sprint = state.call("to_dict").get("mission_index")
+	await get_tree().create_timer(5.0).timeout
+	var catalog: Node = _adapter.nodes.world.get("catalog_panel")
+	var tech: Node = _adapter.nodes.world.get("tech_panel")
+	var before := {"catalog":catalog.call("is_open"),"tech":tech.call("is_open"),"paused":get_tree().paused,"mouse":Input.mouse_mode,"focus":get_viewport().gui_get_focus_owner()}
+	var opened: Dictionary = _network.world_sync.submit_action(peer,3003,"menu_open",{"menu":"tech"})
+	_checks.quest_host_ui_preserved = catalog.call("is_open")==before.catalog and tech.call("is_open")==before.tech and get_tree().paused==before.paused and Input.mouse_mode==before.mouse and get_viewport().gui_get_focus_owner()==before.focus
+	await get_tree().create_timer(2.0).timeout
+	_checks.quest_after_menu = state.call("to_dict").get("mission_index")
+	_checks.native_guest_quests = opened.ok and int(_checks.quest_after_hay)>=2 and int(_checks.quest_after_sprint)>2 and int(_checks.quest_after_menu)>4
+	var previous_velocity := host.velocity
+	host.velocity = Vector3(0,0,8)
+	_adapter.pump_shared_activity()
+	_checks.quest_host_eligible = missions.get("player")==host
+	host.velocity = previous_velocity
+	_adapter.pump_shared_activity()
+	_stage = "extra_actions"
+
+func _native_building_values(records: Array) -> Dictionary:
+	# Independently capture the real native machines, never _live_frame's
+	# canonical receive cache. A missing native assignment must fail this proof.
+	if _adapter._build_capture==null: _adapter._build_capture = load(get_script().resource_path.get_base_dir()+"/live_build_capture.gd").new()
+	var captured: Dictionary = _adapter._build_capture.capture(_adapter.nodes.builds)
+	if not captured.ok or captured.value.size()!=records.size(): return {"ok":false,"reason":"count"}
+	var replica: Script = load(get_script().resource_path.get_base_dir()+"/building_replica.gd")
+	var fields := 0
+	var ids := []
+	var stored := -1
+	for index in range(records.size()):
+		var wanted: Dictionary = records[index]
+		var actual: Dictionary = captured.value[index]
+		if wanted.get("type")!=actual.get("type"): return {"ok":false,"reason":"type"}
+		for key in replica.LIVE.get(wanted.type,[]):
+			if not wanted.has(key): continue
+			if not actual.has(key) or _digest(actual[key])!=_digest(wanted[key]): return {"ok":false,"reason":str(index)+":"+key,"wanted":str(wanted[key]),"actual":str(actual.get(key))}
+			fields += 1
+		if wanted.type=="haystack_scanner": stored = int(actual.get("stored",-1))
+		if replica.COLLECTION.has(wanted.type):
+			for node in _adapter.nodes.builds.get(replica.COLLECTION[wanted.type]):
+				if node is Node3D and node.global_position.is_equal_approx(wanted.position): ids.append(node.get_instance_id())
+	return {"ok":true,"fields":fields,"ids":ids,"scanner_stored":stored,"layout":_digest(replica.new().layout(records))}
+
+func _check_guest_native_buildings() -> void:
+	var proof := _native_building_values(_adapter._guest_buildings)
+	if not proof.ok:
+		_checks.native_machine_misses = int(_checks.get("native_machine_misses",0))+1
+		if not _checks.has("native_machine_miss_detail"): _checks.native_machine_miss_detail = proof
+		return
+	if proof.fields==0: return
+	_checks.native_machine_values = true
+	_checks.native_machine_fields = proof.fields
+	_checks.native_scanner_stored = proof.scanner_stored
+	if proof.layout==_machine_layout and proof.ids!=_machine_ids: _checks.native_machine_misses = int(_checks.get("native_machine_misses",0))+1
+	_machine_layout = proof.layout
+	_machine_ids = proof.ids
+
+func _check_machine_replica(scanner: Node) -> void:
+	_network.world_sync.poll()
+	var deadline := Time.get_ticks_msec()+15000
+	while Time.get_ticks_msec()<deadline:
+		var seen := 0
+		for index in range(1,_count):
+			if _read("guest-"+str(index)).get("checks",{}).get("native_scanner_stored",-1)==10: seen+=1
+		if seen==_count-1: break
+		await get_tree().create_timer(0.1).timeout
+	scanner.call("_take_in","pool",7)
+	_network.world_sync.poll()
+	deadline = Time.get_ticks_msec()+15000
+	while Time.get_ticks_msec()<deadline:
+		var seen := 0
+		for index in range(1,_count):
+			var checks: Dictionary = _read("guest-"+str(index)).get("checks",{})
+			if checks.get("native_scanner_stored",-1)==17 and checks.get("native_machine_values",false) and checks.get("native_machine_misses",0)==0: seen+=1
+		if seen==_count-1:
+			_checks.native_machine_witnesses = true
+			return
+		await get_tree().create_timer(0.1).timeout
+	_checks.native_machine_witnesses = false
