@@ -190,7 +190,7 @@ func _shared_compressed_events(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.7.0")
+	controller.configure(wire,game,"25963876","0.7.1")
 	controller.set_process(false)
 	controller.session.is_host = true
 	controller.session.session_id = "0123456789abcdef0123456789abcdef"
@@ -233,7 +233,9 @@ func _shared_compressed_events(tree: SceneTree) -> Array[String]:
 				if not completed.is_empty() and revisions.is_empty(): revisions.append(completed[0].revision)
 		if completed.size()!=1 or completed[0].value!={"mode":"event","event":event} or revisions!=[1,2]:
 			errors.append("A medium world event must use compressed frames and preserve the following small revision.")
-		if not raw.ok or bytes>=raw.value.size()/2: errors.append("Medium moving-world updates must avoid the old uncompressed bandwidth spike.")
+		# The compact pose format already shrinks the raw reference. Keep an
+		# absolute wire budget as well as requiring useful compression savings.
+		if not raw.ok or bytes>2200 or bytes>=raw.value.size(): errors.append("Medium moving-world updates exceed the wire budget: "+str(bytes)+" bytes")
 		receiver.free()
 	controller.leave()
 	for node in [controller,wire]: node.queue_free()
@@ -247,7 +249,7 @@ func _fair_network_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.7.0")
+	controller.configure(wire,game,"25963876","0.7.1")
 	controller.set_process(false)
 	controller.pose_stream_enabled = false
 	controller.session.is_host = true
@@ -294,7 +296,7 @@ func _idle_pose_traffic(tree: SceneTree) -> Array[String]:
 	game.tree = tree
 	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
 	for node in [wire,controller]: tree.root.add_child(node)
-	controller.configure(wire,game,"25963876","0.7.0")
+	controller.configure(wire,game,"25963876","0.7.1")
 	controller.set_process(false)
 	controller.session.is_host = true
 	controller.session.state = controller.session.State.PLAYING

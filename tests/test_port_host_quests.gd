@@ -31,7 +31,7 @@ class World extends Node:
 		tech_panel.other=catalog_panel;catalog_panel.other=tech_panel;missions.tech=tech_panel
 
 class Adapter extends "res://mods/ftn_coop/game_adapter.gd":
-	func _live_frame() -> Dictionary: return {}
+	func _live_frame() -> Dictionary: return {"state":{"mission_index":0}}
 
 func run(tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []

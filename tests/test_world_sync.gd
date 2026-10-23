@@ -1,9 +1,68 @@
 extends RefCounted
 
+class NativeWorld extends Node:
+	var missions: Node
+
+class CapturingAdapter extends "res://mods/ftn_coop/game_adapter.gd":
+	var captures := 0
+	var native_count := 0
+	var action_count := 0
+	var refuse := false
+	var fail_capture := false
+	func _live_frame() -> Dictionary:
+		captures += 1
+		if fail_capture:
+			last_sync_error = "WORLD_NOT_READY"
+			return {}
+		return {"state":{"native_count":native_count,"action_count":action_count}}
+	func _perform_action(_actor: Node, _kind: String, _payload: Dictionary) -> Dictionary:
+		if refuse: return _error("ACTION_REFUSED")
+		action_count += 1
+		return _ok()
+
+func _native_capture_checks(tree: SceneTree, errors: Array[String]) -> void:
+	var adapter := CapturingAdapter.new()
+	var world := NativeWorld.new()
+	var actor := Node.new()
+	world.add_child(actor)
+	tree.root.add_child(world)
+	adapter.nodes = {"world":world}
+	adapter.actors[2] = actor
+	adapter._previous_frame = adapter._live_frame()
+	adapter.captures = 0
+	adapter.native_count = 1
+	var sync: Node = load("res://mods/ftn_coop/world_sync.gd").new()
+	sync.configure(adapter,true)
+	sync.set_ready(2,true)
+	var events := []
+	sync.confirmed.connect(func(event: Dictionary): events.append(event))
+	var result: Dictionary = sync.submit_action(2,1,"dig",{"pressed":true})
+	if not result.ok or adapter.captures!=1 or events.size()!=1:
+		errors.append("Native actions must capture and confirm one combined world change, not traverse a large factory twice")
+	if result.ok and result.value.patch!={"state_delta":{"native_count":1,"action_count":1}}:
+		errors.append("Combining native action capture lost automatic production or the guest action")
+	var captures := adapter.captures
+	sync.submit_action(2,1,"dig",{"pressed":true})
+	if adapter.captures!=captures or adapter.action_count!=1: errors.append("Replayed native actions captured or modified the world twice")
+	adapter.native_count = 2
+	adapter.refuse = true
+	if sync.submit_action(2,2,"dig",{"pressed":true}).ok: errors.append("Refused native action was accepted")
+	sync.poll()
+	if events[-1].patch!={"state_delta":{"native_count":2}}: errors.append("Refused action swallowed automatic world progress")
+	adapter.refuse = false
+	adapter.fail_capture = true
+	var revision: int = sync.revision
+	var failed: Dictionary = sync.submit_action(2,3,"dig",{"pressed":true})
+	if failed.ok or failed.code!="WORLD_NOT_READY" or sync.revision!=revision:
+		errors.append("Failed native world capture must not confirm an empty action patch")
+	sync.free()
+	world.free()
+
 func run(_tree: SceneTree) -> Array[String]:
 	if not FileAccess.file_exists("res://mods/ftn_coop/world_sync.gd"):
 		return ["Host-authoritative world synchronization is not implemented yet."]
 	var errors: Array[String] = []
+	_native_capture_checks(_tree,errors)
 	var module: Script = load("res://mods/ftn_coop/world_sync.gd")
 	var adapter: RefCounted = load("res://tests/fixtures/fake_world_adapter.gd").new()
 	var host: Node = module.new()

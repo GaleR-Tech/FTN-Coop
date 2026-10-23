@@ -32,6 +32,20 @@ func run(_tree: SceneTree) -> Array[String]:
 			errors.append("Pre-encoded transfers must validate empty data and session identity before compression.")
 	else: errors.append("World event broadcasts need a bounded transfer entry point for shared encoded bytes.")
 	var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
+	var compact_state := {"mode":"event","event":{"revision":5,"patch":{"values":PackedInt32Array([1,2,3])}}}
+	var compact: Dictionary = sender.begin(compact_state,SESSION,5)
+	if not compact.ok or compact.value.frames.size()!=1 or not compact.value.frames[0].get("data") is PackedByteArray:
+		errors.append("Small compressed updates must carry their header and complete payload in one reliable packet")
+	else:
+		var compact_receiver: Node = module.new()
+		compact_receiver.configure(SESSION)
+		var compact_done := []
+		compact_receiver.completed.connect(func(value: Dictionary,revision: int): compact_done.append([value,revision]))
+		var bad: Dictionary = compact.value.frames[0].duplicate(true)
+		bad.data=PackedByteArray([1,2,3])
+		if compact_receiver.receive(1,bad).ok or not compact_done.is_empty(): errors.append("Invalid inline data reached a native world")
+		if not compact_receiver.receive(1,compact.value.frames[0]).ok or compact_done!=[[compact_state,5]]: errors.append("Inline compressed update did not preserve exact contents and revision")
+		compact_receiver.free()
 	for frame in frames:
 		var packet: Dictionary = protocol.encode({"protocol":1,"session":SESSION,"type":frame.kind,"body":frame})
 		if not packet.ok or not protocol.decode(packet.value).ok:

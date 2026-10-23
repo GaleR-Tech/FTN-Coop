@@ -3,19 +3,30 @@ param(
     [string]$GameDir = 'M:\SteamLibrary\steamapps\common\Find The Needle Demo',
     [switch]$Presence,
     [switch]$Persistence,
-    [ValidateRange(0,45)][int]$ReviewSeconds = 0
+    [ValidateRange(0,45)][int]$ReviewSeconds = 0,
+    [string]$SaveFile = '',
+    [ValidateRange(0,300)][int]$PerformanceSeconds = 0,
+    [switch]$Headless,
+    [string]$ModSource = ''
 )
 $ErrorActionPreference = 'Stop'
+if ($Headless -and $Presence) { throw 'Presence checks inspect native draw nodes and require a graphical runtime. Omit -Headless.' }
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
-$resolvedGameDir = (Resolve-Path -LiteralPath $GameDir).Path
+if ($ModSource -eq '') { $ModSource = Join-Path $workspaceRoot 'mods\ftn_coop' }
+if (-not (Test-Path -LiteralPath (Join-Path $ModSource 'bootstrap.gd') -PathType Leaf)) { throw 'Missing mod source.' }
+$resolvedGameDir = (Resolve-Path -LiteralPath $GameDir).ProviderPath
+if ($PerformanceSeconds -gt 0 -and ($PerformanceSeconds -lt 30 -or -not (Test-Path -LiteralPath $SaveFile -PathType Leaf))) { throw 'Performance testing requires at least 30 seconds and an existing save copy.' }
 $nativeRunId = [guid]::NewGuid().ToString('N')
 $nativePort = Get-Random -Minimum 24000 -Maximum 44000
 $nativeLogDir = Join-Path $workspaceRoot ('verification\native-network-' + $Players + '-' + $nativeRunId)
+$nativeWorkingLogDir = if ($PerformanceSeconds -gt 0) { Join-Path $env:LOCALAPPDATA ('FTN-Coop\Tests\'+$nativeRunId) } else { $nativeLogDir }
 $gameUserRoot = Join-Path $env:APPDATA 'Godot\app_userdata\Haystack Incremental'
-$nativeReportDir = Join-Path $nativeLogDir 'reports'
+$nativeReportDir = Join-Path $nativeWorkingLogDir 'reports'
 $nativeCopyBase = Join-Path (Split-Path -Parent $resolvedGameDir) '_ftn_coop_native_tests'
 $nativeCopyRunRoot = Join-Path $nativeCopyBase $nativeRunId
 $privateUserRoots = @()
+$nativeSourceHashes = @{}
+Get-ChildItem -LiteralPath $ModSource -Filter '*.gd' -File | ForEach-Object { $nativeSourceHashes[$_.Name] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
 New-Item -Path $nativeLogDir -ItemType Directory -Force | Out-Null
 New-Item -Path $nativeReportDir -ItemType Directory -Force | Out-Null
 $nativeNames = @('host') + @(1..($Players-1) | ForEach-Object { 'guest-' + $_ })
@@ -66,17 +77,25 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     }
     $privateModDir = Join-Path $privateGameDir 'mods\ftn_coop'
     New-Item -Path $privateModDir -ItemType Directory -Force | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $workspaceRoot 'mods\ftn_coop') -Filter '*.gd' -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $privateModDir }
+    Get-ChildItem -LiteralPath $ModSource -Filter '*.gd' -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $privateModDir }
+    if ($PerformanceSeconds -gt 0) {
+        Copy-Item -LiteralPath (Join-Path $privateModDir 'network_controller.gd') -Destination (Join-Path $privateModDir 'network_controller_base.gd')
+        Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_performance_network.gd') -Destination (Join-Path $privateModDir 'network_controller.gd')
+        Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_performance_adapter.gd') -Destination (Join-Path $privateModDir 'performance_adapter.gd')
+        Copy-Item -LiteralPath (Join-Path $privateModDir 'native_network_check.gd') -Destination (Join-Path $privateModDir 'native_integrity_check.gd')
+        Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_performance_check.gd') -Destination (Join-Path $privateModDir 'native_network_check.gd')
+        if ($nativeIndex -eq 0) { Copy-Item -LiteralPath $SaveFile -Destination (Join-Path $privateGameDir 'performance-slot.dat') }
+    }
     $privateUserName = 'FTN-Coop-Native-' + $nativeRunId + '-' + $nativeIndex
     $privateUserRoot = Join-Path $env:APPDATA $privateUserName
     $privateUserRoots += $privateUserRoot
     New-Item -Path $privateUserRoot -ItemType Directory -Force | Out-Null
     $originalShaderCache = Join-Path $gameUserRoot 'shader_cache'
-    if (Test-Path -LiteralPath $originalShaderCache) { Copy-Item -LiteralPath $originalShaderCache -Destination $privateUserRoot -Recurse }
+    if (-not $Headless -and (Test-Path -LiteralPath $originalShaderCache)) { Copy-Item -LiteralPath $originalShaderCache -Destination $privateUserRoot -Recurse }
     $testOverride = "[autoload]`nFtnCoop=`"*mods/ftn_coop/bootstrap.gd`"`n`n[application]`nconfig/use_custom_user_dir=true`nconfig/custom_user_dir_name=`"$privateUserName`"`n"
     [IO.File]::WriteAllText((Join-Path $privateGameDir 'override.cfg'),$testOverride,[Text.UTF8Encoding]::new($false))
     $nativeRole = if ($nativeIndex -eq 0) { 'host' } else { 'guest' }
-    $nativeLogPath = Join-Path $nativeLogDir ($nativeNames[$nativeIndex] + '.log')
+    $nativeLogPath = Join-Path $nativeWorkingLogDir ($nativeNames[$nativeIndex] + '.log')
     $nativeLogPaths += $nativeLogPath
     $nativeX = 20 + 660 * ($nativeIndex % 2)
     $nativeY = 20 + 420 * [math]::Floor($nativeIndex / 2)
@@ -90,6 +109,8 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     )
     if ($Presence) { $launchArguments += '--ftn-coop-presence-check' }
     if ($Persistence) { $launchArguments += '--ftn-coop-save-check' }
+    if ($PerformanceSeconds -gt 0) { $launchArguments += ('--ftn-performance-seconds='+$PerformanceSeconds) }
+    if ($Headless) { $launchArguments = @('--headless','--audio-driver','Dummy') + $launchArguments }
     $nativeProcesses += Start-Process -FilePath (Join-Path $privateGameDir 'FindTheNeedle.exe') -ArgumentList $launchArguments -WorkingDirectory $privateGameDir -WindowStyle Hidden -PassThru
     if ($nativeIndex -lt ($Players-1)) {
         # Let the host finish before clients start their connection timeout.
@@ -103,9 +124,9 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     }
 }
 } finally { [Environment]::SetEnvironmentVariable('FTN_COOP_TEST_OUTPUT',$previousTestOutput,'Process') }
-@{ run_id=$nativeRunId; players=$Players; process_ids=@($nativeProcesses | ForEach-Object { $_.Id }); game_copies=$nativeCopyRunRoot; private_profiles=$privateUserRoots; log_dir=$nativeLogDir; reports=$nativeReportDir; started=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'request.json')
+@{ run_id=$nativeRunId; players=$Players; process_ids=@($nativeProcesses | ForEach-Object { $_.Id }); game_copies=$nativeCopyRunRoot; private_profiles=$privateUserRoots; log_dir=$nativeLogDir; reports=$nativeReportDir; mod_source=$ModSource; mod_hashes=$nativeSourceHashes; headless=[bool]$Headless; performance_seconds=$PerformanceSeconds; save_sha256=$(if ($SaveFile) { (Get-FileHash -LiteralPath $SaveFile -Algorithm SHA256).Hash } else { '' }); started=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'request.json')
 Write-Output "Started $Players native demo processes. Comparing per-revision shared-world hashes."
-$nativeDeadline = (Get-Date).AddSeconds($(if ($Presence) { if ($Players -eq 4) { 300 } else { 180 } } elseif ($Players -eq 4) { 200 } else { 100 }))
+$nativeDeadline = (Get-Date).AddSeconds($(if ($PerformanceSeconds -gt 0) { $PerformanceSeconds+180 } elseif ($Presence) { if ($Players -eq 4) { 300 } else { 180 } } elseif ($Players -eq 4) { 200 } else { 100 }))
 $nativeReports = @{}
 $nativeAgreement = @{ ok=$false; mismatch=$false; counts=@{} }
 $nativeFailure = ''
@@ -164,6 +185,12 @@ if ($Presence -and $nativeFailure -eq '') {
 }
 $summary = @{ ok=($nativeFailure -eq ''); players=$Players; code=$nativeFailure; matching_revisions=$nativeAgreement.counts }
 $summary | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'summary.json')
+if ($nativeWorkingLogDir -ne $nativeLogDir) {
+    $archivedReports = Join-Path $nativeLogDir 'reports'
+    New-Item -Path $archivedReports -ItemType Directory -Force | Out-Null
+    Get-ChildItem -LiteralPath $nativeReportDir -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $archivedReports }
+    Get-ChildItem -LiteralPath $nativeWorkingLogDir -Filter '*.log' -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $nativeLogDir }
+}
 $summary | ConvertTo-Json -Compress | Write-Output
 if ($nativeFailure -ne '') {
     foreach ($nativeLogPath in $nativeLogPaths) {

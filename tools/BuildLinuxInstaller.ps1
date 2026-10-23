@@ -1,14 +1,13 @@
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'ArtifactPaths.ps1')
+$artifacts = Get-FtnArtifactPaths -ProjectRoot $projectRoot
 & (Join-Path $PSScriptRoot 'Package.ps1')
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$versionMatch = [regex]::Match([IO.File]::ReadAllText((Join-Path $projectRoot 'mods\ftn_coop\bootstrap.gd')),'(?m)^const VERSION := "([0-9]+\.[0-9]+\.[0-9]+)"\r?$')
-if (-not $versionMatch.Success) { throw 'PACKAGE_VERSION_INVALID' }
-$version = $versionMatch.Groups[1].Value
-$output = Join-Path $projectRoot ('dist\FTN-Coop-'+$version+'-Linux.run')
+$output = $artifacts.Linux
 $temporary = $output+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
-$inputZip = [IO.Compression.ZipFile]::OpenRead((Join-Path $projectRoot ('dist\FTN-Coop-'+$version+'.zip')))
+$inputZip = [IO.Compression.ZipFile]::OpenRead($artifacts.Zip)
 try {
     $buffer = [IO.MemoryStream]::new()
     $archive = [IO.Compression.ZipArchive]::new($buffer,[IO.Compression.ZipArchiveMode]::Create,$true)

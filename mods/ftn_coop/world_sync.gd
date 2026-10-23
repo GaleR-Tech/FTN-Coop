@@ -6,6 +6,7 @@ signal resync_required
 const ACTIONS := ["dig","place","demolish","purchase","upgrade","needle_collect","item_interact","machine_config","menu_open"]
 var revision := 0
 var is_host := false
+var action_captures_world := false
 var last_resync_reason := ""
 var _adapter: RefCounted
 var _ready_peers: Dictionary = {}
@@ -15,6 +16,7 @@ var _applying := false
 func configure(adapter: RefCounted, host: bool) -> void:
 	_adapter = adapter
 	is_host = host
+	action_captures_world = adapter.has_method("host_action_captures_world") and adapter.host_action_captures_world()==true
 	revision = 0
 	last_resync_reason = ""
 	_ready_peers.clear()
@@ -43,8 +45,9 @@ func submit_action(actor: int, sequence: int, kind: String, payload: Dictionary)
 			if kind != _last[actor].kind or payload != _last[actor].payload: return _error("SEQUENCE_CONFLICT")
 			return _last[actor].result.duplicate(true)
 		if sequence < _last[actor].sequence: return _error("STALE_ACTION")
-	# Observe earlier native/automatic changes before advancing the remote action.
-	poll()
+	# The native adapter includes all intervening production in its action
+	# patch. Other adapters still need their separate pending-event flush.
+	if not action_captures_world: poll()
 	_applying = true
 	var result: Dictionary = _adapter.apply_host_action(actor,kind,payload)
 	if result.ok:

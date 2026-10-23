@@ -8,6 +8,18 @@ func _table_checks(codec: RefCounted, errors: Array[String]) -> void:
 	var decoded: Dictionary = codec.decode(encoded.value,1024*1024)
 	if not decoded.ok or decoded.value!=records: errors.append("Columnar native records must preserve transforms, scalar precision, nested state and int64 IDs exactly.")
 	if encoded.value.size()>26000: errors.append("Repeated native records must use bounded columns instead of repeating every key and transform tag.")
+	var cargo := []
+	for index in range(1000): cargo.append({"kind":"hay","xform":Transform3D(Basis.IDENTITY,Vector3(index*0.1,1,2))})
+	var cargo_wire: Dictionary = codec.encode(cargo,1024*1024)
+	var cargo_read: Dictionary = codec.decode(cargo_wire.value,1024*1024)
+	if not cargo_read.ok or cargo_read.value!=cargo: errors.append("Conveyor cargo with a common basis must preserve every transform exactly")
+	if cargo_wire.value.size()>40000: errors.append("Conveyor cargo must not transmit the same nine basis components for every item")
+	var shared_basis := Basis(Vector3.UP,0.17)
+	shared_basis.x.y = -0.0
+	for record in cargo: record.xform.basis = shared_basis
+	cargo_wire = codec.encode(cargo,1024*1024)
+	cargo_read = codec.decode(cargo_wire.value,1024*1024)
+	if not cargo_read.ok or var_to_bytes(cargo_read.value)!=var_to_bytes(cargo): errors.append("Shared rotated bases and signed zero bits must remain exact")
 	if decoded.ok:
 		decoded.value[0].state.nested[0] = 99
 		if decoded.value[1].state.nested[0]!=1: errors.append("Repeated table values must decode into independently mutable native records.")
@@ -48,6 +60,8 @@ func _table_checks(codec: RefCounted, errors: Array[String]) -> void:
 		["rows",[4,[[["s","x"],["many",["a",[["i","1"]]]]]]]],
 		["rows",[4,[[["s","x"],["one",["i","1"]]],[["s","x"],["one",["i","2"]]]]]],
 		["rows",[4,[[["s","x"],["xforms",["f64",""]]]]]],
+		["rows",[4,[[["s","x"],["poses",["f64",""]]]]]],
+		["rows",[4,[[["s","x"],["poses",["a",[]]]]]]],
 		["rows",[4,[[["s","x"],["one",["object",1]]]]]],
 	]
 	for value in invalid:
@@ -60,6 +74,20 @@ func run(_tree: SceneTree) -> Array[String]:
 	var errors: Array[String] = []
 	var codec: RefCounted = load("res://mods/ftn_coop/value_codec.gd").new()
 	_table_checks(codec,errors)
+	var long_bytes := PackedByteArray()
+	long_bytes.resize(32768)
+	long_bytes.fill(117)
+	var long_value := {"bytes":long_bytes,"text":"quoted \" [ ] \\"+"ä".repeat(1000)}
+	var long_encoded: Dictionary = codec.encode(long_value,1024*1024)
+	var long_decoded: Dictionary = codec.decode(long_encoded.value,1024*1024)
+	if not long_decoded.ok or long_decoded.value!=long_value: errors.append("Large packed cargo and escaped Unicode strings must round-trip exactly.")
+	var escaped_text := "\\\"[".repeat(4096)+"\\"
+	var escaped_encoded: Dictionary = codec.encode(escaped_text,1024*1024)
+	var escaped_decoded: Dictionary = codec.decode(escaped_encoded.value,1024*1024)
+	if not escaped_decoded.ok or escaped_decoded.value!=escaped_text: errors.append("Repeated escaped quotes and backslashes must retain string boundaries.")
+	for tail in ["\nAAA"," AA=","=AAA","===="]:
+		var malformed: String = '["u8","'+"A".repeat(128)+tail+'"]'
+		if codec.decode(malformed.to_utf8_buffer(),1024*1024).ok: errors.append("Long base64 must reject whitespace and misplaced padding.")
 	for scalar in [13762253.93678915,14.5727403333333,0.1,-0.0,1.0e-200,1.0e200]:
 		var packed: Dictionary = codec.encode(scalar,1024)
 		var unpacked: Dictionary = codec.decode(packed.value,1024)
@@ -90,6 +118,9 @@ func run(_tree: SceneTree) -> Array[String]:
 		errors.append("Foreign binary object data must be rejected before decoding.")
 	if protocol.decode(PackedByteArray([255, 255])).get("code") != "INVALID_PAYLOAD":
 		errors.append("Invalid UTF-8 must fail without a script error.")
+	var bad_utf8 := " ".repeat(128).to_utf8_buffer()
+	bad_utf8.append_array(PackedByteArray([0xed,0xa0,0x80]))
+	if codec.decode(bad_utf8,1024*1024).ok: errors.append("Large packets must still reject malformed non-ASCII UTF-8")
 	var oversized := message.duplicate(true)
 	oversized.body = {"data": PackedByteArray()}
 	oversized.body.data.resize(65537)

@@ -42,6 +42,11 @@ func begin_encoded(raw: PackedByteArray, id: String, revision: int) -> Dictionar
 	_events_bytes = 0
 	var count := ceili(float(packed.size()) / CHUNK_BYTES)
 	var frames: Array[Dictionary] = [{"kind":"SNAPSHOT_BEGIN","session":id,"transfer":transfer_id,"revision":revision,"total_bytes":packed.size(),"raw_bytes":raw.size(),"chunks":count,"sha256":_sha(packed)}]
+	# Most live updates fit one chunk. Keep its header and data together so
+	# reliable control traffic does not wait for a second queue allowance.
+	if count==1:
+		frames[0].data = packed
+		return _ok({"transfer_id":transfer_id,"revision":revision,"frames":frames})
 	for index in range(count):
 		frames.append({"kind":"SNAPSHOT_CHUNK","session":id,"transfer":transfer_id,"revision":revision,"index":index,"data":packed.slice(index*CHUNK_BYTES, mini((index+1)*CHUNK_BYTES,packed.size()))})
 	return _ok({"transfer_id":transfer_id,"revision":revision,"frames":frames})
@@ -63,7 +68,11 @@ func receive(peer_id: int, frame: Dictionary) -> Dictionary:
 	if peer_id != 1: return _error("HOST_ONLY")
 	if frame.get("session") != session_id: return _error("SESSION_MISMATCH")
 	if not _protocol().valid_id(frame.get("transfer")) or typeof(frame.get("revision")) != TYPE_INT or frame.revision < 0: return _error("INVALID_PAYLOAD")
-	if frame.get("kind") == "SNAPSHOT_BEGIN": return _start(frame)
+	if frame.get("kind") == "SNAPSHOT_BEGIN":
+		if frame.has("data") and (frame.get("chunks")!=1 or not frame.data is PackedByteArray or frame.data.size()!=frame.get("total_bytes") or frame.data.size()>CHUNK_BYTES): return _error("INVALID_PAYLOAD")
+		var begun := _start(frame)
+		if not begun.ok or not frame.has("data"): return begun
+		return receive(peer_id,{"kind":"SNAPSHOT_CHUNK","session":frame.session,"transfer":frame.transfer,"revision":frame.revision,"index":0,"data":frame.data})
 	if frame.get("kind") != "SNAPSHOT_CHUNK": return _error("INVALID_PAYLOAD")
 	if _header.is_empty() or frame.transfer != _header.transfer or frame.revision != _header.revision: return _error("TRANSFER_MISMATCH")
 	if typeof(frame.get("index")) != TYPE_INT or frame.index < 0 or frame.index >= _header.chunks or not frame.get("data") is PackedByteArray: return _error("INVALID_PAYLOAD")

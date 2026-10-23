@@ -1,5 +1,27 @@
 # Changelog / Änderungen
 
+## 0.7.1 · 2026-10-23
+
+### English
+
+- Capture successful native guest actions and automatic production in one world frame; postpone the next routine poll after a fresh confirmed action.
+- Scan large ASCII/base64 data and JSON string segments using native operations while retaining UTF-8, depth, finite-value and malformed-input validation.
+- Combine small compressed updates into one reliable packet, keeping checksum, decompression and revision checks and full multi-chunk transfers for larger data.
+- Send changed conveyor cargo rows without repeating unchanged path geometry; validate native cargo fields before changing guest state.
+- Share identical cargo bases across transform columns, preserving exact rotation and position values. Install 0.7.1 on every participant and restart.
+- Reject failed native captures before advancing the world revision. Added a four-player old-save performance check with isolated profiles and native machine/cargo witnesses; Steam WAN and graphical Linux/Proton remain separate checks.
+- Local graphical four-player old-save test: typical guest action responses 133–144 ms, per-guest p95 305–372 ms. Isolated delays up to 3.1 seconds remain; the graphical 250 ms p95 target is not met. This is a partial performance improvement, not a complete fix.
+
+### Deutsch
+
+- Erfolgreiche native Gastaktionen und automatische Produktion werden in einem Weltstand erfasst. Nach einer neu bestätigten Aktion verschiebt sich die nächste regelmäßige Abfrage.
+- Große ASCII-/Base64-Daten und JSON-Zeichenketten werden mit nativen Funktionen geprüft. Prüfungen für UTF-8, Tiefe, endliche Zahlen und fehlerhafte Eingaben bleiben erhalten.
+- Kleine komprimierte Änderungen werden in einer zuverlässigen Nachricht übertragen. Prüfsummen, Entpackgrenzen und Revisionsprüfungen bleiben erhalten; große Daten nutzen weiterhin mehrere Teile.
+- Geänderte Bandladungen werden ohne unveränderte Bandgeometrie übertragen. Native Ladungsfelder werden vor einer Änderung des Gastzustands geprüft.
+- Gleiche Ausrichtungswerte der Bandfracht werden gemeinsam übertragen. Drehungen und Positionen bleiben exakt erhalten. Alle Teilnehmer müssen 0.7.1 installieren und neu starten.
+- Fehlgeschlagene Welterfassungen erhöhen die Weltrevision nicht mehr. Ein neuer Lasttest nutzt vier Spieler, isolierte Profile und einen alten Spielstand und prüft native Maschinenwerte sowie Bandladungen. Steam-Internetbetrieb und grafisches Linux/Proton werden gesondert geprüft.
+- Lokaler grafischer Test mit vier Spielern und altem Spielstand: typische Gastantworten 133–144 ms, je Gast 305–372 ms für 95 % der Aktionen. Einzelne Verzögerungen bis 3,1 Sekunden bleiben; das grafische Ziel von 250 ms ist nicht erreicht. Die Performance ist verbessert, aber noch nicht vollständig behoben.
+
 ## 0.7.0 · 2026-10-23
 
 ### English

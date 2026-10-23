@@ -47,7 +47,7 @@ func send(target: int, channel: int, bytes: PackedByteArray, _reliable: bool) ->
 	if corrupt_baselines>0:
 		var protocol: RefCounted = load("res://mods/ftn_coop/protocol.gd").new()
 		var packet: Dictionary = protocol.decode(bytes)
-		if packet.ok and packet.value.type=="SNAPSHOT_CHUNK":
+		if packet.ok and (packet.value.type=="SNAPSHOT_CHUNK" or (packet.value.type=="SNAPSHOT_BEGIN" and packet.value.body.has("data"))):
 			packet.value.body.data[0] = packet.value.body.data[0] ^ 1
 			bytes = protocol.encode(packet.value).value
 			corrupt_baselines -= 1

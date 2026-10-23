@@ -353,7 +353,12 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 						_queue(peer,"ACTION_RESULT",{"sequence":body.sequence,"ok":false,"code":updated.code})
 						return
 					if body.pose.get("position") is Vector3 and body.pose.position.is_finite(): _peer_positions[peer] = body.pose.position
+				var previous_revision: int = world_sync.revision
 				var applied: Dictionary = world_sync.submit_action(peer,body.sequence,body.kind,body.payload)
+				if not _adapter.last_sync_error.is_empty():
+					_fail(_adapter.last_sync_error)
+					return
+				if applied.ok and world_sync.action_captures_world and world_sync.revision>previous_revision: _poll_due = 0.0
 				var result := {"sequence":body.sequence,"ok":applied.ok,"code":applied.code}
 				if applied.ok and body.kind in ["purchase","item_interact"] and _adapter.has_method("read_actor_equipment"):
 					result.equipment = _adapter.read_actor_equipment(peer)

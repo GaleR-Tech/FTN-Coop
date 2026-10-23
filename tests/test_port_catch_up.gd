@@ -16,7 +16,7 @@ func run(tree: SceneTree) -> Array[String]:
 	var adapter := Adapter.new()
 	var server: Node = script.new()
 	tree.root.add_child(server);server.set_process(false)
-	server.configure(wire,adapter,"25963876","0.7.0")
+	server.configure(wire,adapter,"25963876","0.7.1")
 	server.session.is_host = true
 	server.session.session_id = "0123456789abcdef0123456789abcdef"
 	server.session.roster = {1:{"id":1,"name":"Server","role":"server","accepted":true,"state":"playing"},2:{"id":2,"name":"Guest","role":"player","accepted":true,"state":"syncing"}}
@@ -50,7 +50,7 @@ func run(tree: SceneTree) -> Array[String]:
 		if server.session.roster[2].state!="playing" or not server.world_sync._ready_peers.has(2) or server._pending.has(2): errors.append("Valid final acknowledgement does not unlock and release the loading slot")
 		var client: Node = script.new();tree.root.add_child(client);client.set_process(false)
 		var guest_adapter := Adapter.new()
-		client.configure(wire,guest_adapter,"25963876","0.7.0")
+		client.configure(wire,guest_adapter,"25963876","0.7.1")
 		client.session.state = client.session.State.SYNCING
 		client._baseline_received = true
 		client.world_sync.revision = 1

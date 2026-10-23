@@ -4,6 +4,8 @@ extends RefCounted
 const MAX_DEPTH := 32
 var _valid := true
 var _remaining := 0
+var _base64_pattern: RegEx
+var _ascii_pattern: RegEx
 
 func encode(value: Variant, limit: int) -> Dictionary:
 	_valid = true
@@ -225,11 +227,26 @@ func _pack_table(rows: Array, depth: int) -> Variant:
 			column = ["many",_pack(PackedInt64Array(values) if kind==TYPE_INT else PackedFloat64Array(values),depth+1)]
 		elif uniform and kind==TYPE_TRANSFORM3D:
 			var components := PackedFloat64Array()
+			var shared_basis: Basis = values[0].basis
+			var basis_bits := var_to_bytes(shared_basis)
+			var common := true
 			for value in values:
-				for vector in [value.basis.x,value.basis.y,value.basis.z,value.origin]:
+				if var_to_bytes(value.basis)!=basis_bits:
+					common = false
+					break
+			if common:
+				for vector in [shared_basis.x,shared_basis.y,shared_basis.z]:
 					if not vector.is_finite(): _valid = false
 					components.append_array(PackedFloat64Array([vector.x,vector.y,vector.z]))
-			column = ["xforms",_pack(components,depth+2)]
+				for value in values:
+					if not value.origin.is_finite(): _valid = false
+					components.append_array(PackedFloat64Array([value.origin.x,value.origin.y,value.origin.z]))
+			else:
+				for value in values:
+					for vector in [value.basis.x,value.basis.y,value.basis.z,value.origin]:
+						if not vector.is_finite(): _valid = false
+						components.append_array(PackedFloat64Array([vector.x,vector.y,vector.z]))
+			column = ["poses" if common else "xforms",_pack(components,depth+2)]
 		else: column = ["many",_pack(values,depth+1)]
 		columns.append([_pack(key,depth+2),column])
 	return ["rows",[rows.size(),columns]]
@@ -287,6 +304,13 @@ func _unpack_table(body: Variant, depth: int) -> Variant:
 				for value in values:
 					if not is_finite(value): _valid = false
 				data[key] = {"xforms":values}
+			"poses":
+				if not values is PackedFloat64Array or values.size()!=9+count*3:
+					_valid = false
+					return null
+				for value in values:
+					if not is_finite(value): _valid = false
+				data[key] = {"poses":values,"basis":Basis(Vector3(values[0],values[1],values[2]),Vector3(values[3],values[4],values[5]),Vector3(values[6],values[7],values[8]))}
 			_:
 				_valid = false
 				return null
@@ -300,10 +324,14 @@ func _unpack_table(body: Variant, depth: int) -> Variant:
 				var value: Variant = column.one
 				row[key] = _copy_cell(value)
 			elif column.has("many"): row[key] = column.many[index]
-			else:
+			elif column.has("xforms"):
 				var p: PackedFloat64Array = column.xforms
 				var at := index*12
 				row[key] = Transform3D(Basis(Vector3(p[at],p[at+1],p[at+2]),Vector3(p[at+3],p[at+4],p[at+5]),Vector3(p[at+6],p[at+7],p[at+8])),Vector3(p[at+9],p[at+10],p[at+11]))
+			else:
+				var p: PackedFloat64Array = column.poses
+				var at := 9+index*3
+				row[key] = Transform3D(column.basis,Vector3(p[at],p[at+1],p[at+2]))
 		rows.append(row)
 	return rows
 
@@ -351,6 +379,13 @@ func _copy_cell(value: Variant) -> Variant:
 
 func _base64_valid(value: String) -> bool:
 	if value.length() % 4 != 0: return false
+	# Large packed arrays dominate live factory updates. Validate their alphabet
+	# in native code rather than allocating a GDScript string for every byte.
+	if value.length()>=128:
+		if _base64_pattern==null:
+			_base64_pattern = RegEx.new()
+			_base64_pattern.compile("\\A[A-Za-z0-9+/]*={0,2}\\z")
+		return _base64_pattern.search(value)!=null
 	var padding := false
 	var count := 0
 	for character in value:
@@ -365,6 +400,16 @@ func _base64(value: PackedByteArray) -> String:
 	return Marshalls.raw_to_base64(value) if not value.is_empty() else ""
 
 func _utf8_valid(bytes: PackedByteArray) -> bool:
+	# Most live packets consist entirely of ASCII tags and base64. A native
+	# alphabet check avoids a byte-by-byte script loop; all non-ASCII input
+	# still goes through the complete UTF-8 validator below.
+	if bytes.size()>=128:
+		var latin := bytes.get_string_from_ascii()
+		if latin.length()==bytes.size():
+			if _ascii_pattern==null:
+				_ascii_pattern = RegEx.new()
+				_ascii_pattern.compile("\\A[\\x00-\\x7f]*\\z")
+			if _ascii_pattern.search(latin)!=null: return true
 	var index := 0
 	while index < bytes.size():
 		var first: int = bytes[index]
@@ -382,22 +427,28 @@ func _utf8_valid(bytes: PackedByteArray) -> bool:
 
 func _json_bounded(value: String) -> bool:
 	var depth := 0
-	var quoted := false
-	var escaped := false
 	var index := 0
+	var escape := value.find("\\")
 	while index < value.length():
 		var character := value[index]
-		if quoted:
-			if escaped:
-				# Our encoder writes Unicode directly. Reject surrogate escape input
-				# before Godot's permissive JSON parser can emit Unicode errors.
-				if character == "u" and index + 4 < value.length():
-					var hex := value.substr(index+1,4).to_lower()
+		if character == '"':
+			index += 1
+			var end := value.find('"',index)
+			while true:
+				if end<0: return false
+				if escape>=0 and escape<index: escape = value.find("\\",index)
+				if escape<0 or escape>end:
+					index = end+1
+					break
+				# Skip whole ordinary string segments using native searches, while
+				# still inspecting every escape before the permissive JSON parser.
+				if escape+1>=value.length(): return false
+				if value[escape+1]=="u" and escape+5<value.length():
+					var hex := value.substr(escape+2,4).to_lower()
 					if hex.begins_with("d8") or hex.begins_with("d9") or hex.begins_with("da") or hex.begins_with("db") or hex.begins_with("dc") or hex.begins_with("dd") or hex.begins_with("de") or hex.begins_with("df"): return false
-				escaped = false
-			elif character == "\\": escaped = true
-			elif character == '"': quoted = false
-		elif character == '"': quoted = true
+				index = escape+2
+				if end<index: end = value.find('"',index)
+			continue
 		elif character in "0123456789-":
 			var start := index
 			while index < value.length() and value[index] in "0123456789.eE+-": index += 1
@@ -411,7 +462,7 @@ func _json_bounded(value: String) -> bool:
 			if depth > 132: return false
 		elif character == "]" or character == "}": depth -= 1
 		index += 1
-	return not quoted and depth == 0
+	return depth == 0
 
 func _result(ok: bool, code: String, value: Variant = null) -> Dictionary:
 	return {"ok":ok,"code":code,"value":value}

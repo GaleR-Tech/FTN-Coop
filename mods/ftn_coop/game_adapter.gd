@@ -583,12 +583,19 @@ func update_actor_pose(peer_id: int, pose: Dictionary) -> Dictionary:
 	if actors[peer_id].has_method("_sync_hands"): actors[peer_id].call("_sync_hands")
 	return _ok()
 
+func host_action_captures_world() -> bool:
+	# Successful native actions compare the complete post-action world with the
+	# last accepted frame, including intervening automatic machine progress.
+	return true
+
 func apply_host_action(actor_id: int, kind: String, payload: Dictionary) -> Dictionary:
 	if kind not in ["dig","place","demolish","purchase","upgrade","needle_collect","item_interact","machine_config","menu_open"]: return _error("ACTION_INVALID")
 	if guest_mode: return _error("HOST_ONLY")
 	if not actors.has(actor_id) or not is_instance_valid(actors[actor_id]): return _error("ACTOR_NOT_READY")
 	var actor: Node = actors[actor_id]
-	if _previous_frame.is_empty(): _previous_frame = _live_frame()
+	if _previous_frame.is_empty():
+		_previous_frame = _live_frame()
+		if _previous_frame.is_empty(): return _error(last_sync_error if not last_sync_error.is_empty() else "WORLD_NOT_READY")
 	var result := _perform_action(actor,kind,payload)
 	if not result.ok: return result
 	var missions: Node = nodes.world.get("missions")
@@ -599,6 +606,7 @@ func apply_host_action(actor_id: int, kind: String, payload: Dictionary) -> Dict
 		missions.call("_watch",0.0)
 		missions.set("player",previous)
 	var frame := _live_frame()
+	if frame.is_empty(): return _error(last_sync_error if not last_sync_error.is_empty() else "WORLD_NOT_READY")
 	var patch := _difference(_previous_frame,frame)
 	_previous_frame = frame
 	return _ok({"kind":kind,"actor":actor_id,"patch":patch})
@@ -776,6 +784,11 @@ func _difference(before: Dictionary, after: Dictionary) -> Dictionary:
 	var patch := {}
 	for key in after:
 		if before.get(key) == after[key]: continue
+		if key=="belts" and before.get(key) is Dictionary:
+			var delta: Dictionary = load(MODULE_DIR+"/belt_replica.gd").new().difference(before[key],after[key])
+			if not delta.is_empty():
+				patch.belts_delta = delta
+				continue
 		if key=="buildings" and before.get(key) is Array and before[key].size()==after[key].size():
 			patch.buildings_delta = load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new().difference(before[key],after[key])
 			continue
@@ -1149,7 +1162,9 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		_guest_belts = patch.belts.duplicate(true)
 		_guest_belts_ready = true
 		_guest_belts_world = nodes.world.get_instance_id()
-	if _guest_belts_ready and (patch.has("belts") or patch.has("buildings") or patch.has("buildings_delta")): _queue_belt_render()
+	elif patch.has("belts_delta"):
+		_guest_belts = load(MODULE_DIR+"/belt_replica.gd").new().expand(_guest_belts,patch.belts_delta).value
+	if _guest_belts_ready and (patch.has("belts") or patch.has("belts_delta") or patch.has("buildings") or patch.has("buildings_delta")): _queue_belt_render()
 	if patch.has("loose"):
 		_hide_native_loose(true)
 		var loose_result: Dictionary = _loose_module().apply(patch.loose,nodes.world.get_tree().root)
@@ -1306,6 +1321,9 @@ func _patch_valid(patch: Dictionary) -> bool:
 	if patch.has("state_delta") and (not patch.state_delta is Dictionary or patch.has("state")): return false
 	if patch.has("loose_delta") and (not patch.loose_delta is Dictionary or patch.has("loose")): return false
 	if patch.has("props") and not patch.props is Array: return false
+	if patch.has("belts_delta"):
+		if patch.has("belts") or not _guest_belts_ready or not nodes.has("world") or _guest_belts_world!=nodes.world.get_instance_id(): return false
+		if not load(MODULE_DIR+"/belt_replica.gd").new().expand(_guest_belts,patch.belts_delta).ok: return false
 	if patch.has("buildings_delta"):
 		if patch.has("buildings") or _guest_buildings_world!=nodes.world.get_instance_id(): return false
 		if not load(get_script().resource_path.get_base_dir()+"/building_replica.gd").new().expand(_guest_buildings,patch.buildings_delta).ok: return false
@@ -1315,8 +1333,8 @@ func _patch_valid(patch: Dictionary) -> bool:
 	native.erase("quest")
 	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","state_delta","tech","heights","field","buildings","buildings_delta","props","held_props","belts","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
-		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","buildings_delta":"builds","props":"props","held_props":"props","belts":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
+		if key not in ["state","state_delta","tech","heights","field","buildings","buildings_delta","props","held_props","belts","belts_delta","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
+		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","buildings_delta":"builds","props":"props","held_props":"props","belts":"world","belts_delta":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
 		if not nodes.has(role): return false
 		if key=="countdown":
 			if not patch[key] is Dictionary or patch[key].size()!=1 or typeof(patch[key].get("seconds"))!=TYPE_INT or patch[key].seconds<0 or patch[key].seconds>86400: return false
