@@ -69,9 +69,48 @@ func run(tree: SceneTree) -> Array[String]:
 	DirAccess.remove_absolute(cfg.path)
 	cfg.free()
 	errors.append_array(_adapter_boundary())
+	errors.append_array(_personal_settings())
 	errors.append_array(await _settings_ui(tree))
 	errors.append_array(await _settings_wire(tree))
 	await tree.process_frame
+	return errors
+
+func _personal_settings() -> Array[String]:
+	var errors: Array[String] = []
+	# These native Cfg preferences cover controls, interface, display and graphics.
+	# Audio has its own native autoload and is checked by the native scope probe.
+	var personal := {"quality":1,"gfx":{"msaa":4,"shadows":false},"renderer":"vulkan","mouse_sensitivity":0.33,"invert_look_x":true,"toggle_sprint":true,"locale":"en","hud_scale":0.9,"show_hotkey_bar":false,"fullscreen":true,"vsync":false,"max_fps":144,"window_size":Vector2i(1920,1080)}
+	var cfg: Node = load("res://tests/fixtures/game_config.gd").new()
+	cfg.path="user://ftn-personal-scope-"+str(Time.get_ticks_usec())+".cfg"
+	for key in personal: cfg.set(key,personal[key])
+	cfg.save_settings()
+	var scope: RefCounted = load("res://mods/ftn_coop/shared_settings.gd").new()
+	scope.configure(cfg)
+	var outgoing: Dictionary = scope.capture()
+	for key in personal:
+		if outgoing.value.has(key): errors.append("Personal setting leaked into the host gameplay snapshot: "+key)
+	if not scope.accept(HOST).ok: errors.append("Valid gameplay settings rejected with independent personal preferences")
+	for key in personal:
+		var invalid: Dictionary = HOST.duplicate(true)
+		invalid[key]=personal[key]
+		if scope.accept(invalid).ok: errors.append("Host could supply a personal setting: "+key)
+		scope.enforce()
+		if cfg.get(key)!=personal[key]: errors.append("Gameplay enforcement changed a personal setting: "+key)
+	# Local edits made during a session must survive the next host update and departure.
+	cfg.hud_scale=1.2
+	cfg.max_fps=120
+	cfg.gfx={"msaa":0,"shadows":true}
+	scope.accept(HOST)
+	scope.release()
+	var saved := ConfigFile.new()
+	saved.load(cfg.path)
+	personal.hud_scale=1.2;personal.max_fps=120;personal.gfx={"msaa":0,"shadows":true}
+	for key in personal:
+		if scope.update_host(key,personal[key]).code!="SETTINGS_INVALID": errors.append("Host shared editor accepted a personal setting: "+key)
+		if cfg.get(key)!=personal[key] or saved.get_value("personal",key)!=personal[key]: errors.append("Guest personal setting was lost on departure: "+key)
+	if saved.get_value("gameplay","prop_cap")!=150: errors.append("Host gameplay values leaked into the guest's personal file")
+	DirAccess.remove_absolute(cfg.path)
+	cfg.free()
 	return errors
 
 func _settings_wire(tree: SceneTree) -> Array[String]:
@@ -179,6 +218,9 @@ func _adapter_boundary() -> Array[String]:
 	changed.auto_clean_seconds = -1
 	if adapter.apply_confirmed_event({"patch":{"settings":changed,"state":{"money":99.0}}}).ok or state.data.money!=7.0 or cfg.prop_cap!=500:
 		errors.append("Malformed settings must reject the entire world patch before any partial mutation.")
+	for category in ["audio","controls","interface","display","graphics","cfg"]:
+		var personal_patch := {"state":{"money":99.0},category:{"value":1}}
+		if adapter.apply_confirmed_event({"patch":personal_patch}).ok or state.data.money!=7.0: errors.append("Personal host data was accepted as a world update: "+category)
 	adapter.restore_shared_settings()
 	if cfg.prop_cap!=150 or cfg.settings_readonly:
 		errors.append("The real adapter cleanup must restore its guest's native settings.")

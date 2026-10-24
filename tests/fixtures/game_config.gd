@@ -14,6 +14,16 @@ var settings_readonly := false
 var quality := 2
 var mouse_sensitivity := 0.7
 var locale := "de"
+var gfx := {"msaa":2,"shadows":true}
+var renderer := "d3d12"
+var invert_look_x := false
+var toggle_sprint := false
+var hud_scale := 1.0
+var show_hotkey_bar := true
+var fullscreen := false
+var vsync := true
+var max_fps := 60
+var window_size := Vector2i(1280,720)
 var path := ""
 
 func save_settings() -> void:
@@ -22,7 +32,7 @@ func save_settings() -> void:
 	file.load(path)
 	for key in ["prop_cap","prop_decay","belt_cap","belt_decay","auto_clean","auto_clean_seconds","grid_lock","autosave","autosave_seconds"]:
 		file.set_value("gameplay",key,get(key))
-	for key in ["quality","mouse_sensitivity","locale"]:
+	for key in ["quality","mouse_sensitivity","locale","gfx","renderer","invert_look_x","toggle_sprint","hud_scale","show_hotkey_bar","fullscreen","vsync","max_fps","window_size"]:
 		file.set_value("personal",key,get(key))
 	file.save(path)
 
