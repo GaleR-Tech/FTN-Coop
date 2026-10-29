@@ -32,10 +32,12 @@ class NativePeer extends OfflineMultiplayerPeer:
 class SteamApi extends RefCounted:
 	var result := 25
 	var sent := 0
+	var last_flags := 0
 	func getConnectionInfo(_handle: int) -> Dictionary:
 		return {"identity":123,"user_data":2,"connection_state":3}
 	func sendMessageToConnection(_handle: int, _bytes: PackedByteArray, _flags: int) -> Dictionary:
 		sent += 1
+		last_flags = _flags
 		return {"result":result,"message_number":sent}
 
 class RejectTransport extends "res://tests/fixtures/fake_transport.gd":
@@ -52,7 +54,7 @@ class TrafficTransport extends "res://tests/fixtures/fake_transport.gd":
 	func send(peer: int, _channel: int, bytes: PackedByteArray, reliable: bool) -> Dictionary:
 		if blocked and peer==2 and reliable: return {"ok":false,"code":"WOULD_BLOCK","value":null}
 		var decoded: Dictionary = load("res://mods/ftn_coop/protocol.gd").new().decode(bytes)
-		if decoded.ok: messages.append({"peer":peer,"type":decoded.value.type,"body":decoded.value.body})
+		if decoded.ok: messages.append({"peer":peer,"type":decoded.value.type,"body":decoded.value.body,"bytes":bytes.size(),"reliable":reliable})
 		return {"ok":true,"code":"OK","value":null}
 
 class SaturatedTransport extends "res://tests/fixtures/pipe_transport.gd":
@@ -179,6 +181,7 @@ func run(tree: SceneTree) -> Array[String]:
 	errors.append_array(await _disconnect_during_broadcast(tree))
 	errors.append_array(await _fragmented_event_backpressure(tree))
 	errors.append_array(await _fair_network_traffic(tree))
+	errors.append_array(await _bounded_frame_traffic(tree))
 	errors.append_array(await _idle_pose_traffic(tree))
 	errors.append_array(await _shared_compressed_events(tree))
 	return errors
@@ -286,6 +289,48 @@ func _fair_network_traffic(tree: SceneTree) -> Array[String]:
 		errors.append("A blocked world packet must still arrive exactly once after movement has passed it.")
 	controller.leave()
 	for node in [controller,wire]: node.queue_free()
+	await tree.process_frame
+	return errors
+
+func _bounded_frame_traffic(tree: SceneTree) -> Array[String]:
+	var errors: Array[String] = []
+	var wire := TrafficTransport.new()
+	var game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
+	game.tree = tree
+	var controller: Node = load("res://mods/ftn_coop/network_controller.gd").new()
+	for node in [wire,controller]: tree.root.add_child(node)
+	controller.configure(wire,game,"26260645","0.7.2")
+	controller.set_process(false)
+	controller.session.is_host = true
+	controller.session.session_id = "0123456789abcdef0123456789abcdef"
+	for peer in [2,3,4]:
+		for actor in [1,2,3]: controller._queue(peer,"POSE",{"peer":actor,"pose":{"position":Vector3(actor,0,0)}},false)
+		for revision in [1,2,3]: controller._queue(peer,"EVENT",{"revision":revision,"patch":{"blob":"a".repeat(9000)}})
+		controller._queue(peer,"ACTION_RESULT",{"sequence":1,"ok":true,"code":"OK"})
+	controller._drain_packets(0.033)
+	for peer in [2,3,4]:
+		var revisions := []
+		var answered := false
+		for message in wire.messages:
+			if message.peer!=peer: continue
+			if message.type=="EVENT": revisions.append(message.body.revision)
+			if message.type=="ACTION_RESULT": answered = true
+		if revisions!=[1,2,3] or not answered: errors.append("Movement must not consume the small-message allowance and delay a guest's bounded world update and action result.")
+	for frame in range(8):
+		if controller._tx.is_empty(): break
+		controller._drain_packets(0.033)
+	wire.messages.clear()
+	for revision in range(4,24): controller._queue(2,"EVENT",{"revision":revision,"patch":{"blob":"b".repeat(20000)}})
+	controller._queue(3,"STATUS_PROBE",{"token":1})
+	controller._drain_packets(0.033)
+	var bytes := 0
+	var healthy := false
+	for message in wire.messages:
+		if message.peer==2 and message.reliable: bytes += message.bytes
+		if message.peer==3: healthy = true
+	if bytes>65536 or not healthy or controller._tx.is_empty(): errors.append("Large transfers must obey each peer's byte budget while another peer's control messages remain deliverable.")
+	controller.leave()
+	for node in [wire,controller]: node.queue_free()
 	await tree.process_frame
 	return errors
 
@@ -414,6 +459,7 @@ func _steam_send_results() -> Array[String]:
 	api.result = 1
 	if not wire.send(2,0,PackedByteArray([1,2,3]),true).ok or api.sent!=2:
 		errors.append("A reliable Steam packet must retry through the checked send API once buffer space is available.")
+	if api.last_flags!=9: errors.append("Interactive reliable Steam messages must bypass the SDK's optional Nagle delay without losing reliable delivery.")
 	wire._steam = null
 	wire.free()
 	return errors

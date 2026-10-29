@@ -1,4 +1,4 @@
-# FTN-Koop · 0.7.1
+# FTN-Koop · 0.7.2
 
 [English](README.en.md) · Deutsch
 
@@ -6,13 +6,14 @@ Eigene, inoffizielle Koop-Mod für **Find The Needle Demo** (Windows; Linux-Inst
 Ein Host und bis zu drei Freunde arbeiten in derselben Welt. Geld, Forschung,
 Heu, Gebäude und Nadeln gehören zur gemeinsamen Sitzung.
 
-Version **0.7.1** vermeidet die doppelte Welterfassung bei Gastaktionen und prüft laufende Daten schneller. Gegenstände mit gleicher Ausrichtung teilen sich diese Werte, statt sie für jedes Objekt zu wiederholen. Bei Förderbändern werden geänderte Ladungszeilen übertragen; unveränderte Bandwege bleiben erhalten. Fehler bei der Welterfassung beenden die Sitzung, statt leere Änderungen zu bestätigen. Der spielbare Host, gemeinsame Quests und bis zu drei Gäste bleiben erhalten. Alle müssen 0.7.1 installieren und neu starten.
+Version **0.7.2** unterstützt Demo V71 (Build 26260645). Sichtbarkeitsaktualisierungen für Förderbänder und Gebäude laufen beim Gast weiter, während die Spielwelt ausschließlich beim Host simuliert wird. Die nativen Schatten folgen der jeweiligen Gastkamera. Zuverlässige Steam-Nachrichten umgehen den optionalen Sendetimer des SDK. Alle müssen 0.7.2 installieren und neu starten.
 
 **Entwicklungsstand: Internetbetrieb zwischen verschiedenen Steam-Konten ist
 noch unbestätigt.** Die lokalen Prüfungen verwenden echte Demo-Instanzen,
-ersetzen aber keinen Test mit Freunden über Steam. Derzeit ist ausschließlich
-Demo-Build **25963876 (V66)** freigeschaltet. Die Vollversion und spätere
-Spielupdates benötigen eine erneute Prüfung.
+ersetzen aber keinen Test mit Freunden über Steam. Unterstützt werden
+Demo-Build **26260645 (V71)** und **25963876 (V66)**. Alle Spieler einer Sitzung
+brauchen denselben Spiel-Build. Die Vollversion und andere Spielupdates
+benötigen eine erneute Prüfung.
 
 **Download:** [Installer und ZIP unter Releases](https://github.com/GaleR-Tech/FTN-Coop/releases).
 Zum Spielen ist kein Umgang mit dem Quellcode nötig.
@@ -47,7 +48,7 @@ der Demo selbst folgen weiterhin deren eigenen Spracheinstellungen.
 
 Neu in 0.1.3: Der Installer hat eine dunkle Oberfläche mit goldenen Akzenten. Er zeigt installierte und enthaltene Version sowie die passende Hauptaktion. Die Fortschrittsanzeige bleibt während der Verarbeitung unbestimmt; ein Abschluss erscheint erst nach dem tatsächlichen Ergebnis. **GitHub-Projekt** öffnet das Quellcode-Repository im Browser.
 
-Am einfachsten mit **FTN-Coop-0.7.1-Setup.exe**:
+Am einfachsten mit **FTN-Coop-0.7.2-Setup.exe**:
 
 1. Das Spiel schließen und die EXE doppelklicken.
 2. Den automatisch gefundenen Demo-Ordner prüfen oder über **Ordner …** auswählen.
@@ -74,7 +75,7 @@ und andere Mod-Dateien werden bei der Entfernung berücksichtigt.
 
 ## Linux-Installation (Ubuntu / Mint)
 
-Neu in **0.4.0**: **FTN-Coop-0.7.1-Linux.run** unter Releases herunterladen.
+Neu in **0.4.0**: **FTN-Coop-0.7.2-Linux.run** unter Releases herunterladen.
 Die einzelne Datei enthält den Installer und alle Mod-Dateien. Benötigt werden
 **Python 3.8 oder neuer** und für das optionale Fenster **python3-tk**; zusätzliche
 pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schließen.
@@ -84,7 +85,7 @@ pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schl
 2. Im Terminal in den Download-Ordner wechseln und starten:
 
    ```sh
-   python3 FTN-Coop-0.7.1-Linux.run
+   python3 FTN-Coop-0.7.2-Linux.run
    ```
 
 3. Erkannten Demo-Ordner prüfen oder über **Ordner auswählen** ändern. **Installieren**
@@ -96,7 +97,7 @@ pip-Pakete sind nicht nötig. Demo vor Installation, Update oder Entfernung schl
 Ohne grafisches Fenster steht die Terminal-Oberfläche bereit:
 
 ```sh
-python3 FTN-Coop-0.7.1-Linux.run --cli
+python3 FTN-Coop-0.7.2-Linux.run --cli
 ```
 
 Einen bestimmten Ordner mit `--install --game-dir "/pfad/zu/Find The Needle Demo"`
@@ -114,10 +115,10 @@ und andere Mods bleiben erhalten. Der Installer lädt nichts nach.
 **Prüfgrenze:** Datei-, Paket- und Oberflächentests liefen auf dem Windows-
 Entwicklungsrechner. Ausführung unter Ubuntu/Mint, Desktop-Integration,
 Proton-Spielbetrieb und gemeinsame Windows/Linux-Sitzungen benötigen noch einen
-echten Linux-Test. Alle Teilnehmer brauchen **0.7.1** und Demo-Build **25963876**.
+echten Linux-Test. Alle Teilnehmer brauchen **0.7.2** und denselben unterstützten Demo-Build.
 Internetspiel zwischen getrennten Steam-Konten bleibt unbestätigt.
 
-Im lokalen Test mit vier grafischen Spielinstanzen auf einem PC dauerten typische Gastaktionen 133–144 ms; 95 % lagen je Gast unter 305–372 ms. Einzelne Verzögerungen bis 3,1 Sekunden bleiben. Dieses Update behebt die Performanceprobleme noch nicht vollständig.
+V71 wurde lokal mit einer Kopie des alten Spielstands 3 (374 Gebäude), einem Host und drei Gästen geprüft. Der abschließende 120-Sekunden-Lauf ohne Grafik bestand mit 165 Aktionen je Gast, einem Median von 131 ms und je Gast 208–232 ms für 95 % der Aktionen. Ein weiterer 120-Sekunden-Lauf mit einem grafischen Gast und drei Instanzen ohne Grafik bestand ebenfalls: Median 131 ms, je Gast 200–246 ms für 95 % der Aktionen, übereinstimmende Weltstände und genau ein Weltladen je Gast. Drei Gast-Heuansichten bestanden die nativen Sichtbarkeits-/Detailstufenprüfungen und die Bildkontrolle. Eine einzelne Aktionsverzögerung von 3,2 Sekunden bleibt; die Performance ist verbessert, aber nicht vollständig behoben. Zwei frühere Prüfungen mit vier Grafikfenstern endeten in einem Windows-Bluescreen und einem vollständig eingefrorenen PC; die Ursache ist offen. Vier gleichzeitige Grafikinstanzen, Steam-Internetlatenz und Linux-/Proton-Stabilität bleiben ungeprüft.
 
 ## Mit Freunden spielen
 
@@ -220,7 +221,7 @@ Abfragen sind einmal pro Minute möglich; ohne Verbindung oder bei einem
 Anfragelimit bleibt das Spiel benutzbar. Spielernamen, Steam-IDs, Lobbykennungen,
 lokale Pfade, Fehlerberichte und Spielstände werden nicht mitgeschickt.
 
-0.7.1: [Downloads und Versionshinweise](https://github.com/GaleR-Tech/FTN-Coop/releases/tag/v0.7.1). Der Internetbetrieb mit
+0.7.2: [Downloads und Versionshinweise](https://github.com/GaleR-Tech/FTN-Coop/releases/tag/v0.7.2). Der Internetbetrieb mit
 getrennten Steam-Konten bleibt unbestätigt.
 
 ## Speichern und Verlassen
@@ -263,7 +264,7 @@ die Mod entfernen und auf eine geprüfte Fassung warten.
 - Die originalen Bau-, Forschungs- und Pausemenüs sind für Gäste eingebunden;
   weitere Sonderfunktionen und dekorative Effekte benötigen Tests mit Freunden.
 - Gemeinsame Windows/Linux-Beitritte wurden gemeldet, ebenso Linux-Host-Abstürze.
-  Die Proton-Absturzursache ist ungeklärt; 0.7.1 bestätigt keine Absturzbehebung.
+  Die Proton-Absturzursache ist ungeklärt; 0.7.2 bestätigt keine Absturzbehebung.
 - Falls Gäste direkt nach dem Beitritt nicht laufen können, half in einer
   gemeldeten Sitzung Alt+Tab und Zurückwechseln. Eine automatische Fokuskorrektur ist unbestätigt.
 - Die Demo schaltet bei geladenen Mods ihre Bestenlisten ab.

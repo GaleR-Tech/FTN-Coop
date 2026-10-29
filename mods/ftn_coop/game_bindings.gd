@@ -5,12 +5,15 @@ const REQUIRED := [
 	"guest_mutation_guard", "machine_host_only", "player_pose", "isolated_guest_session", "host_save",
 ]
 
+static func supports_build(build: String) -> bool:
+	return build in ["25963876", "26260645"]
+
 func required_capabilities() -> PackedStringArray:
 	return PackedStringArray(REQUIRED)
 
 func verified_evidence(build: String) -> Dictionary:
 	# Verified by the flagged native integration check; see integration-report.md.
-	if build != "25963876":
+	if not supports_build(build):
 		return {}
 	var evidence := {}
 	for capability in REQUIRED:

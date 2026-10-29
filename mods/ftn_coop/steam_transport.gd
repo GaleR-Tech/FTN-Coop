@@ -7,8 +7,8 @@ signal failed(code: String)
 signal message_received(peer_id: int, channel: int, bytes: PackedByteArray)
 signal invite_received(lobby_id: int)
 
-var build := "25963876"
-var mod_version := "0.7.1"
+var build := "26260645"
+var mod_version := "0.7.2"
 var lobby_id := 0
 var _steam: Object
 var _peer: MultiplayerPeer
@@ -87,7 +87,7 @@ func send(peer_id: int, channel: int, bytes: PackedByteArray, reliable: bool) ->
 			if _connection_handles[handle]!=identity: continue
 			var info: Dictionary = _steam.call("getConnectionInfo",handle)
 			if info.get("connection_state")!=3 or info.get("identity")!=identity or info.get("user_data")!=peer_id: continue
-			var result: Dictionary = _steam.call("sendMessageToConnection",handle,bytes,8) # Steam reliable, lane 0.
+			var result: Dictionary = _steam.call("sendMessageToConnection",handle,bytes,9) # ReliableNoNagle, lane 0.
 			if result.get("result")==25: return _error("WOULD_BLOCK")
 			return _ok(null) if result.get("result")==1 else _error("SEND_FAILED")
 		return _error("WOULD_BLOCK") # Connection callback can follow peer_connected.

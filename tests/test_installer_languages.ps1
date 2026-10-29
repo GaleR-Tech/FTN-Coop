@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $SetupPath) {
     & (Join-Path $projectRoot 'tools\BuildInstaller.ps1')
-    $SetupPath = Join-Path $projectRoot 'dist\0.7\0.7.1\FTN-Coop-0.7.1-Setup.exe'
+    $SetupPath = Join-Path $projectRoot 'dist\0.7\0.7.2\FTN-Coop-0.7.2-Setup.exe'
 }
 if (-not $Worker) {
     # Isolate Windows Forms and culture changes, and bound unexpected modal dialogs.
@@ -77,7 +77,7 @@ try {
     $directory.Text = $game
     Require ($form.Text -eq 'FTN-Coop · Setup') 'Non-German Windows UI culture did not default to English.'
     Require-Caption $form 'Find The Needle · Co-op'
-    Require-Caption $form 'Setup for the Steam demo V66 (Build 25963876).'
+    Require-Caption $form 'Setup for the Steam demo V71 (Build 26260645).'
     Require-Caption $form 'Demo folder'
     Require-Caption $form 'Browse …'
     Require-Caption $form 'Install'
@@ -91,7 +91,7 @@ try {
     $selector.SelectedIndex = 0
     Require ($form.Text -eq 'FTN-Koop · Installation') 'Choosing Deutsch did not translate the form title.'
     Require-Caption $form 'Find The Needle · Koop'
-    Require-Caption $form 'Installation für die Steam-Demo V66 (Build 25963876).'
+    Require-Caption $form 'Installation für die Steam-Demo V71 (Build 26260645).'
     Require-Caption $form 'Demo-Ordner'
     Require-Caption $form 'Ordner …'
     Require-Caption $form 'Installieren'

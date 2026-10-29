@@ -17,14 +17,14 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("FTN-Coop Setup")]
 [assembly: AssemblyProduct("FTN-Coop")]
-[assembly: AssemblyVersion("0.7.1.0")]
-[assembly: AssemblyFileVersion("0.7.1.0")]
+[assembly: AssemblyVersion("0.7.2.0")]
+[assembly: AssemblyFileVersion("0.7.2.0")]
 
 internal enum SetupLanguage { German, English }
 
 internal static class Program
 {
-    internal const string CurrentVersion = "0.7.1";
+    internal const string CurrentVersion = "0.7.2";
     internal const string ProjectUrl = "https://github.com/GaleR-Tech/FTN-Coop";
     internal const string SupportUrl = "https://buymeacoffee.com/galertech";
 
@@ -634,7 +634,7 @@ internal sealed class SetupForm : Form
         if (!busy) installation = Program.InspectInstallation(directory.Text);
         Text = Program.Text(language, "FTN-Koop · Installation", "FTN-Coop · Setup");
         heading.Text = Program.Text(language, "Find The Needle · Koop", "Find The Needle · Co-op");
-        description.Text = Program.Text(language, "Installation für die Steam-Demo V66 (Build 25963876).", "Setup for the Steam demo V66 (Build 25963876).");
+        description.Text = Program.Text(language, "Installation für die Steam-Demo V71 (Build 26260645).", "Setup for the Steam demo V71 (Build 26260645).");
         languageLabel.Text = Program.Text(language, "Sprache", "Language");
         directoryLabel.Text = Program.Text(language, "Demo-Ordner", "Demo folder");
         browse.Text = Program.Text(language, "Ordner …", "Browse …");

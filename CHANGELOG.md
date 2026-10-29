@@ -1,5 +1,29 @@
 # Changelog / Änderungen
 
+## 0.7.2 · 2026-10-29
+
+### English
+
+- Support Demo V71/build 26260645 alongside the verified V66 build. Sessions still require the same game build and mod version on every participant.
+- Keep native guest conveyor/building visibility helpers running and update static machine LOD and shadow visibility from the guest camera, while the host retains world simulation.
+- Reuse confirmed straw world poses with one hand/tool frame per owner instead of repeating hundreds of held transforms. Exact reconstruction is checked before sending; the full representation remains the fallback.
+- Increase the per-frame send allowance while bounding reliable traffic per peer. Preserve ordered updates and retry handling; use Steam ReliableNoNagle to avoid the optional SDK send timer.
+- Reject malformed combined loose/held updates before changing guest state, independently of dictionary order.
+- Verified: 40 mod suites, four native players with save/rejoin and distinct personal settings, and old-slot-3 tests with 374 buildings. The final 120-second hybrid graphics run reached per-guest action p95 200–246 ms and passed three hay views; an isolated delay of 3.2 seconds remains.
+- Two earlier attempts with four graphical instances on this PC ended in a Windows bluescreen and a full-PC freeze. The cause is unresolved; the final run used one graphical guest and three headless processes. Four simultaneous graphical instances on one PC remain unverified.
+- Install 0.7.2 on every participant and restart. Personal audio, controls, interface, display and graphics stay local. Steam Internet and graphical Linux/Proton remain separate checks.
+
+### Deutsch
+
+- Demo V71/Build 26260645 wird zusätzlich zum geprüften V66-Build unterstützt. Alle Teilnehmer brauchen weiterhin denselben Spiel-Build und dieselbe Mod-Version.
+- Die originalen Helfer für Band- und Gebäudesichtbarkeit laufen beim Gast weiter. Maschinen-Detailstufen und Schatten folgen der Gastkamera; die Weltberechnung bleibt beim Host.
+- Bestätigte Halmpositionen werden mit einer Hand-/Werkzeugausrichtung je Besitzer wiederverwendet. Hunderte doppelte Transformationen entfallen. Vor dem Versand wird die exakte Rekonstruktion geprüft; andernfalls gilt die bisherige vollständige Darstellung.
+- Mehr Nachrichten passen in einen Durchlauf; zuverlässige Daten bleiben pro Gast begrenzt und geordnet. Steam ReliableNoNagle vermeidet die optionale SDK-Sendeverzögerung.
+- Fehlerhafte kombinierte Daten für lose und gehaltene Objekte werden unabhängig von der Feldreihenfolge vor jeder Zustandsänderung abgewiesen.
+- Geprüft: 40 Mod-Prüfsuiten, vier native Teilnehmer mit Speichern/Wiederbeitritt und unterschiedlichen persönlichen Einstellungen sowie der alte Spielstand 3 mit 374 Gebäuden. Im abschließenden 120-Sekunden-Lauf mit einem grafischen Gast lagen 95 % der Aktionen je Gast unter 200–246 ms; drei Heuansichten bestanden die Prüfung. Eine einzelne Verzögerung von 3,2 Sekunden bleibt.
+- Zwei frühere Läufe mit vier Grafikfenstern auf diesem PC endeten in einem Windows-Bluescreen und einem eingefrorenen PC. Die Ursache ist offen; der abschließende Lauf verwendete einen grafischen Gast und drei Instanzen ohne Grafik. Der abschließende Nachweis für vier gleichzeitige Grafikinstanzen auf einem PC steht aus.
+- Alle Teilnehmer müssen 0.7.2 installieren und neu starten. Ton, Steuerung, Oberfläche, Anzeige und Grafik bleiben persönlich. Steam-Internetbetrieb und grafisches Linux/Proton werden gesondert geprüft.
+
 ## 0.7.1 · 2026-10-23
 
 ### English

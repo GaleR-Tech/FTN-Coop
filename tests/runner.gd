@@ -1,6 +1,8 @@
 extends SceneTree
 
 const SUITES := {
+	"guest_presentation": "res://tests/test_guest_presentation.gd",
+	"held_replica": "res://tests/test_held_replica.gd",
 	"port_host_quests": "res://tests/test_port_host_quests.gd",
 	"port_build_reuse": "res://tests/test_port_build_reuse.gd",
 	"port_prop_updates": "res://tests/test_port_prop_updates.gd",

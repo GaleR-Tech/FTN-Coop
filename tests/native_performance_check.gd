@@ -4,11 +4,13 @@ extends Node
 class MeteredTransport extends "res://mods/ftn_coop/local_transport.gd":
 	var sent_bytes := 0
 	var sent_packets := 0
+	var packet_sizes := []
 	func send(target: int, channel: int, bytes: PackedByteArray, reliable: bool) -> Dictionary:
 		var result := super.send(target,channel,bytes,reliable)
 		if result.ok:
 			sent_bytes += bytes.size()
 			sent_packets += 1
+			if packet_sizes.size()<20000: packet_sizes.append(bytes.size())
 		return result
 
 var _adapter: RefCounted
@@ -44,6 +46,10 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	_role = _argument(args,"--ftn-role=","host")
 	_index = _argument(args,"--ftn-index=","0").to_int()
 	_count = _argument(args,"--ftn-count=","4").to_int()
+	var game_build := _argument(args,"--ftn-build=","")
+	if not load(base+"/game_bindings.gd").supports_build(game_build): return _finish("BUILD_UNVERIFIED")
+	_checks.game_build = game_build
+	_checks.render_backend = DisplayServer.get_name()
 	_duration = _argument(args,"--ftn-performance-seconds=","60").to_int()
 	_directory = OS.get_environment("FTN_COOP_TEST_OUTPUT").replace("\\","/")
 	_adapter = load(base+"/performance_adapter.gd").new()
@@ -86,7 +92,7 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	_transport.port = _argument(args,"--ftn-port=","27641").to_int()
 	_runtime = load(base+"/coop_runtime.gd").new()
 	add_child(_runtime)
-	_runtime.configure(_adapter,_transport,"25963876",str(load(base+"/bootstrap.gd").get_script_constant_map().get("VERSION","")))
+	_runtime.configure(_adapter,_transport,game_build,str(load(base+"/bootstrap.gd").get_script_constant_map().get("VERSION","")))
 	_network = _runtime.network
 	_network.problem.connect(func(code: String):
 		if not FileAccess.file_exists(_directory+"/stop.request"): _fatal = code
@@ -107,6 +113,14 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 		await get_tree().process_frame
 		if FileAccess.file_exists(_directory+"/stop.request"): break
 	if not _done and _fatal.is_empty(): _fatal = "TEST_TIMEOUT"
+	if _role=="host":
+		_checks.event_profile = _network.profile_event_fields()
+		var peak: Dictionary = load(base+"/value_codec.gd").new().encode(_network._peak_patch,64*1024*1024)
+		if peak.ok:
+			var peak_file := FileAccess.open(_directory+"/peak-event.json",FileAccess.WRITE)
+			if peak_file!=null:
+				peak_file.store_buffer(peak.value)
+				peak_file.close()
 	_stage = "closed"
 	_checks.transport_stats = {}
 	for peer in _transport._peers:
@@ -133,6 +147,10 @@ func _guest_actions() -> void:
 	_stage = "measuring"
 	_adapter.perf.clear()
 	_network.perf.clear()
+	_network.maximum_queue_bytes = 0
+	_network.maximum_queue_packets = 0
+	_network.trace.clear()
+	_transport.packet_sizes.clear()
 	var cycle := 0
 	while Time.get_ticks_msec()-_measure_at<_duration*1000 and _fatal.is_empty():
 		var x := float((_index-2)*6)+sin(float(cycle)*0.4)*0.5
@@ -173,6 +191,9 @@ func _guest_actions() -> void:
 	if DisplayServer.get_name()!="headless":
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_directory+"/guest-"+str(_index)+".png")
+		await _capture_hay_views()
+	else:
+		await _capture_hay_views(false)
 	_stage = "actions_done"
 	_write("RUNNING")
 
@@ -238,6 +259,11 @@ func _process(_delta: float) -> void:
 			_stage = "measuring"
 			_adapter.perf.clear()
 			_network.perf.clear()
+			_network.maximum_queue_bytes = 0
+			_network.maximum_queue_packets = 0
+			_network.trace.clear()
+			_network.event_shape_active = true
+			_transport.packet_sizes.clear()
 	if _role=="host" and _stage=="measuring":
 		var complete := true
 		for index in range(1,_count):
@@ -279,6 +305,37 @@ func _write(status: String) -> void:
 	if file==null: return
 	file.store_string(JSON.stringify({"status":status,"code":_fatal,"stage":_stage,"revision":_network.world_sync.revision if _network!=null else -1,"scenario_complete":_done,"scenario_revision":0,"history":_history,"checks":_checks,"join_ms":_join_ms,"measurement_ms":Time.get_ticks_msec()-_measure_at if _measure_at>0 else 0,"frame":_stats(_frames),"actions":_stats(_actions),"rtt":_stats(_latencies),"timings":timings,"queue_bytes":_network._tx_bytes if _network!=null else 0,"max_queue_bytes":_network.maximum_queue_bytes if _network!=null else 0,"max_queue_packets":_network.maximum_queue_packets if _network!=null else 0,"sent_bytes":_transport.sent_bytes if _transport!=null else 0,"snapshot_loads":_snapshot_loads}))
 	file.close()
+	if _done and _network!=null:
+		var diagnostic := FileAccess.open(_directory+"/"+("host" if _role=="host" else "guest-"+str(_index))+"-transport.json",FileAccess.WRITE)
+		if diagnostic!=null:
+			diagnostic.store_string(JSON.stringify({"trace":_network.trace,"packet_sizes":_transport.packet_sizes}))
+			diagnostic.close()
+
+func _capture_hay_views(gpu: bool=true) -> void:
+	var player: Node3D = _adapter.nodes.player
+	var witness: RefCounted = load(get_script().resource_path.get_base_dir()+"/native_render_witness.gd").new()
+	var views := []
+	var number := 0
+	for position in [Vector3(0,6.0,14),Vector3(-10,6.0,10),Vector3(10,6.0,0)]:
+		player.global_position = position
+		var direction: Vector3 = (Vector3(0,3.5,0)-position).normalized()
+		player.call("set_look",atan2(-direction.x,-direction.z),asin(direction.y))
+		await get_tree().create_timer(1.5).timeout
+		if gpu: await RenderingServer.frame_post_draw
+		var view: Dictionary = witness.inspect(_adapter)
+		if not view.lod_follows_camera or not view.machine_lod_static or view.invalid_transforms>0 or view.slot_errors>0: _fatal = "NATIVE_HAY_VIEW_INVALID"
+		if gpu:
+			for path in ["res://scripts/build/belt_batch.gd","res://scripts/build/structure_cull.gd","res://scripts/world/shadow_lod.gd"]:
+				if not view.presentation.has(path): _fatal = "GUEST_PRESENTATION_MISSING"
+		for entry in view.presentation.values():
+			if entry.nodes!=entry.processing: _fatal = "GUEST_PRESENTATION_STOPPED"
+		view.position = position
+		view.gpu_rendered = gpu
+		views.append(view)
+		if gpu: get_viewport().get_texture().get_image().save_png(_directory+"/guest-"+str(_index)+"-hay-"+str(number)+".png")
+		number += 1
+	# CPU visibility checks are separate evidence; they never certify pixels.
+	_checks["native_hay_views" if gpu else "native_visibility_cpu"] = views
 
 func _read(name: String) -> Dictionary:
 	var file := FileAccess.open(_directory+"/"+name+".json",FileAccess.READ)

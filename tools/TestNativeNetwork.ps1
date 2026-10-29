@@ -7,14 +7,23 @@ param(
     [string]$SaveFile = '',
     [ValidateRange(0,300)][int]$PerformanceSeconds = 0,
     [switch]$Headless,
+    [ValidateRange(-1,3)][int]$GraphicalPeer = -1,
     [string]$ModSource = ''
 )
 $ErrorActionPreference = 'Stop'
 if ($Headless -and $Presence) { throw 'Presence checks inspect native draw nodes and require a graphical runtime. Omit -Headless.' }
+if ($GraphicalPeer -ge 0 -and (-not $Headless -or $GraphicalPeer -ge $Players -or $PerformanceSeconds -lt 30)) { throw 'GraphicalPeer requires a valid peer index, -Headless and a performance scenario.' }
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 if ($ModSource -eq '') { $ModSource = Join-Path $workspaceRoot 'mods\ftn_coop' }
 if (-not (Test-Path -LiteralPath (Join-Path $ModSource 'bootstrap.gd') -PathType Leaf)) { throw 'Missing mod source.' }
 $resolvedGameDir = (Resolve-Path -LiteralPath $GameDir).ProviderPath
+$nativeManifestPath = Join-Path (Split-Path -Parent (Split-Path -Parent $resolvedGameDir)) 'appmanifest_5165210.acf'
+if (-not (Test-Path -LiteralPath $nativeManifestPath -PathType Leaf)) { throw 'Native testing requires the source Steam installation manifest.' }
+$nativeManifest = [IO.File]::ReadAllText($nativeManifestPath)
+$nativeAppId = [regex]::Match($nativeManifest,'"appid"\s+"([0-9]+)"').Groups[1].Value
+$nativeInstallDir = [regex]::Match($nativeManifest,'"installdir"\s+"([^"/\\]+)"').Groups[1].Value
+$nativeGameBuild = [regex]::Match($nativeManifest,'"buildid"\s+"([0-9]+)"').Groups[1].Value
+if ($nativeAppId -ne '5165210' -or $nativeInstallDir -ne (Split-Path -Leaf $resolvedGameDir) -or -not $nativeGameBuild) { throw 'Source Steam manifest does not identify this demo installation.' }
 if ($PerformanceSeconds -gt 0 -and ($PerformanceSeconds -lt 30 -or -not (Test-Path -LiteralPath $SaveFile -PathType Leaf))) { throw 'Performance testing requires at least 30 seconds and an existing save copy.' }
 $nativeRunId = [guid]::NewGuid().ToString('N')
 $nativePort = Get-Random -Minimum 24000 -Maximum 44000
@@ -32,6 +41,8 @@ New-Item -Path $nativeReportDir -ItemType Directory -Force | Out-Null
 $nativeNames = @('host') + @(1..($Players-1) | ForEach-Object { 'guest-' + $_ })
 $nativeProcesses = @()
 $nativeLogPaths = @()
+$nativeHeadlessPeers = @()
+$nativeGraphicalPeers = @()
 
 function Read-NativeReport([string]$ReportName) {
     $reportPath = Join-Path $nativeReportDir ($ReportName + '.json')
@@ -68,6 +79,8 @@ $previousTestOutput = [Environment]::GetEnvironmentVariable('FTN_COOP_TEST_OUTPU
 [Environment]::SetEnvironmentVariable('FTN_COOP_TEST_OUTPUT',$nativeReportDir.Replace('\','/'),'Process')
 try {
 for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
+    $peerHeadless = $Headless -and ($nativeIndex -ne $GraphicalPeer)
+    if ($peerHeadless) { $nativeHeadlessPeers += $nativeIndex } else { $nativeGraphicalPeers += $nativeIndex }
     $privateGameDir = Join-Path $nativeCopyRunRoot $nativeIndex
     New-Item -Path $privateGameDir -ItemType Directory -Force | Out-Null
     foreach ($nativeFile in Get-ChildItem -LiteralPath $resolvedGameDir -File | Where-Object { $_.Extension -in @('.exe','.pck','.dll','.txt') }) {
@@ -84,6 +97,7 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
         Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_performance_adapter.gd') -Destination (Join-Path $privateModDir 'performance_adapter.gd')
         Copy-Item -LiteralPath (Join-Path $privateModDir 'native_network_check.gd') -Destination (Join-Path $privateModDir 'native_integrity_check.gd')
         Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_performance_check.gd') -Destination (Join-Path $privateModDir 'native_network_check.gd')
+        Copy-Item -LiteralPath (Join-Path $workspaceRoot 'tests\native_render_witness.gd') -Destination (Join-Path $privateModDir 'native_render_witness.gd')
         if ($nativeIndex -eq 0) { Copy-Item -LiteralPath $SaveFile -Destination (Join-Path $privateGameDir 'performance-slot.dat') }
     }
     $privateUserName = 'FTN-Coop-Native-' + $nativeRunId + '-' + $nativeIndex
@@ -91,7 +105,7 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     $privateUserRoots += $privateUserRoot
     New-Item -Path $privateUserRoot -ItemType Directory -Force | Out-Null
     $originalShaderCache = Join-Path $gameUserRoot 'shader_cache'
-    if (-not $Headless -and (Test-Path -LiteralPath $originalShaderCache)) { Copy-Item -LiteralPath $originalShaderCache -Destination $privateUserRoot -Recurse }
+    if (-not $peerHeadless -and (Test-Path -LiteralPath $originalShaderCache)) { Copy-Item -LiteralPath $originalShaderCache -Destination $privateUserRoot -Recurse }
     $testOverride = "[autoload]`nFtnCoop=`"*mods/ftn_coop/bootstrap.gd`"`n`n[application]`nconfig/use_custom_user_dir=true`nconfig/custom_user_dir_name=`"$privateUserName`"`n"
     [IO.File]::WriteAllText((Join-Path $privateGameDir 'override.cfg'),$testOverride,[Text.UTF8Encoding]::new($false))
     $nativeRole = if ($nativeIndex -eq 0) { 'host' } else { 'guest' }
@@ -105,12 +119,12 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
         '--max-fps','30','--render-thread','safe','--quit-after','90000','--log-file',('"'+$nativeLogPath+'"'),'--',
         '--ftn-coop-native-network-test','--ftn-coop-autoquit',
         ('--ftn-role='+$nativeRole),('--ftn-index='+$nativeIndex),('--ftn-count='+$Players),
-        ('--ftn-port='+$nativePort),('--ftn-run='+$nativeRunId)
+        ('--ftn-port='+$nativePort),('--ftn-run='+$nativeRunId),('--ftn-build='+$nativeGameBuild)
     )
     if ($Presence) { $launchArguments += '--ftn-coop-presence-check' }
     if ($Persistence) { $launchArguments += '--ftn-coop-save-check' }
     if ($PerformanceSeconds -gt 0) { $launchArguments += ('--ftn-performance-seconds='+$PerformanceSeconds) }
-    if ($Headless) { $launchArguments = @('--headless','--audio-driver','Dummy') + $launchArguments }
+    if ($peerHeadless) { $launchArguments = @('--headless','--audio-driver','Dummy') + $launchArguments }
     $nativeProcesses += Start-Process -FilePath (Join-Path $privateGameDir 'FindTheNeedle.exe') -ArgumentList $launchArguments -WorkingDirectory $privateGameDir -WindowStyle Hidden -PassThru
     if ($nativeIndex -lt ($Players-1)) {
         # Let the host finish before clients start their connection timeout.
@@ -124,7 +138,7 @@ for ($nativeIndex=0; $nativeIndex -lt $Players; $nativeIndex++) {
     }
 }
 } finally { [Environment]::SetEnvironmentVariable('FTN_COOP_TEST_OUTPUT',$previousTestOutput,'Process') }
-@{ run_id=$nativeRunId; players=$Players; process_ids=@($nativeProcesses | ForEach-Object { $_.Id }); game_copies=$nativeCopyRunRoot; private_profiles=$privateUserRoots; log_dir=$nativeLogDir; reports=$nativeReportDir; mod_source=$ModSource; mod_hashes=$nativeSourceHashes; headless=[bool]$Headless; performance_seconds=$PerformanceSeconds; save_sha256=$(if ($SaveFile) { (Get-FileHash -LiteralPath $SaveFile -Algorithm SHA256).Hash } else { '' }); started=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'request.json')
+@{ run_id=$nativeRunId; game_build=$nativeGameBuild; source_manifest=$nativeManifestPath; players=$Players; process_ids=@($nativeProcesses | ForEach-Object { $_.Id }); game_copies=$nativeCopyRunRoot; private_profiles=$privateUserRoots; log_dir=$nativeLogDir; reports=$nativeReportDir; mod_source=$ModSource; mod_hashes=$nativeSourceHashes; headless=($nativeGraphicalPeers.Count -eq 0); headless_peers=$nativeHeadlessPeers; graphical_peers=$nativeGraphicalPeers; performance_seconds=$PerformanceSeconds; save_sha256=$(if ($SaveFile) { (Get-FileHash -LiteralPath $SaveFile -Algorithm SHA256).Hash } else { '' }); started=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $nativeLogDir 'request.json')
 Write-Output "Started $Players native demo processes. Comparing per-revision shared-world hashes."
 $nativeDeadline = (Get-Date).AddSeconds($(if ($PerformanceSeconds -gt 0) { $PerformanceSeconds+180 } elseif ($Presence) { if ($Players -eq 4) { 300 } else { 180 } } elseif ($Players -eq 4) { 200 } else { 100 }))
 $nativeReports = @{}

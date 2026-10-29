@@ -9,6 +9,8 @@ signal markers_changed(rows: Array)
 signal player_status_changed(rows: Dictionary)
 
 const COMPRESS_EVENT_BYTES := 2048
+const SEND_PACKETS_PER_FRAME := 48
+const SEND_BYTES_PER_PEER := 65536
 
 var session: Node
 var world_sync: Node
@@ -250,17 +252,24 @@ func _drain_packets(delta: float) -> void:
 	var blocked := {}
 	var destinations := {}
 	for packet in _tx: destinations[packet.peer] = true
-	var allowance := maxi(1,ceili(12.0/maxi(1,destinations.size())))
+	var allowance := maxi(1,ceili(float(SEND_PACKETS_PER_FRAME)/maxi(1,destinations.size())))
 	var peer_attempts := {}
+	var peer_bytes := {}
 	var attempts := 0
 	var epoch := _epoch
 	# Poses are independent, replaceable state. Deliver the newest movement
 	# before bulk data, while reliable packets retain their per-peer FIFO.
 	for reliable in [false,true]:
 		var index := 0
-		while index<_tx.size() and attempts<12:
+		while index<_tx.size() and attempts<SEND_PACKETS_PER_FRAME:
 			var packet: Dictionary = _tx[index]
 			if packet.reliable!=reliable or (reliable and blocked.has(packet.peer)) or int(peer_attempts.get(packet.peer,0))>=allowance:
+				index += 1
+				continue
+			# Small movement/control packets must not exhaust the frame's packet
+			# allowance. Bound reliable bursts by bytes, keeping each peer's FIFO.
+			if reliable and int(peer_bytes.get(packet.peer,0))+packet.bytes.size()>SEND_BYTES_PER_PEER:
+				blocked[packet.peer] = true
 				index += 1
 				continue
 			attempts += 1
@@ -276,6 +285,7 @@ func _drain_packets(delta: float) -> void:
 						return
 				index += 1
 				continue
+			if reliable: peer_bytes[packet.peer] = int(peer_bytes.get(packet.peer,0))+packet.bytes.size()
 			_tx_bytes -= packet.bytes.size()
 			_tx.remove_at(index)
 			if reliable: _send_blocked.erase(packet.peer)

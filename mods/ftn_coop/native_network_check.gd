@@ -50,6 +50,9 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	_role = _argument(args,"--ftn-role=","host")
 	_index = _argument(args,"--ftn-index=","0").to_int()
 	_count = _argument(args,"--ftn-count=","2").to_int()
+	var game_build := _argument(args,"--ftn-build=","")
+	if not load(base+"/game_bindings.gd").supports_build(game_build): return _finish("BUILD_UNVERIFIED")
+	var mod_version: String = str(load(base+"/bootstrap.gd").get_script_constant_map().get("VERSION",""))
 	_presence_check = args.has("--ftn-coop-presence-check")
 	_save_check = args.has("--ftn-coop-save-check")
 	var run_id := _argument(args,"--ftn-run=","")
@@ -107,12 +110,12 @@ func run(base: String, args: PackedStringArray) -> Dictionary:
 	if _presence_check:
 		_runtime = load(base+"/coop_runtime.gd").new()
 		add_child(_runtime)
-		_runtime.configure(_adapter,transport,"25963876","0.7.1")
+		_runtime.configure(_adapter,transport,game_build,mod_version)
 		_network = _runtime.network
 	else:
 		_network = load(base+"/network_controller.gd").new()
 		add_child(_network)
-		_network.configure(transport,_adapter,"25963876","0.7.1")
+		_network.configure(transport,_adapter,game_build,mod_version)
 	_network.session.player_name = "Netztest "+str(_index)
 	_network.problem.connect(func(code: String):
 		if not _directory.is_empty() and FileAccess.file_exists(_directory+"/stop.request"): return

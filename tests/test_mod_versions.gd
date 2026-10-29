@@ -18,6 +18,7 @@ func run(tree: SceneTree) -> Array[String]:
 	var wire: Node = load("res://mods/ftn_coop/steam_transport.gd").new()
 	var steam := LobbySteam.new()
 	wire._steam = steam
+	wire.build = "25963876"
 	wire.mod_version = "0.4.0"
 	wire._pending_join = 42
 	wire._join_generation = wire._generation

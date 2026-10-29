@@ -40,6 +40,7 @@ var _local_peer := 0
 var _guest_countdown: Dictionary = {}
 var _countdown_world_id := 0
 var _guest_field: RefCounted
+var _guest_view: RefCounted
 var _tool_load_state: RefCounted
 var _build_capture: RefCounted
 var _guest_belts: Dictionary = {}
@@ -784,6 +785,11 @@ func _difference(before: Dictionary, after: Dictionary) -> Dictionary:
 	var patch := {}
 	for key in after:
 		if before.get(key) == after[key]: continue
+		if key=="held_loose" and after.get("loose") is Dictionary:
+			var compact: Dictionary = load(MODULE_DIR+"/held_replica.gd").new().pack(after[key],after.loose,_loose_module().hold_frames)
+			if compact.ok:
+				patch.held_loose_links = compact.value
+				continue
 		if key=="belts" and before.get(key) is Dictionary:
 			var delta: Dictionary = load(MODULE_DIR+"/belt_replica.gd").new().difference(before[key],after[key])
 			if not delta.is_empty():
@@ -856,6 +862,9 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 	if _guest_field!=null:
 		_guest_field.restore()
 		_guest_field = null
+	if _guest_view!=null:
+		_guest_view.restore()
+		_guest_view = null
 	_restore_guest_collisions()
 	if has_world:
 		nodes.world.process_mode = _world_mode
@@ -886,6 +895,9 @@ func set_guest_mode(enabled: bool) -> Dictionary:
 
 func prepare_guest_presentation() -> void:
 	if not nodes.has("world") or not is_instance_valid(nodes.world) or nodes.world.get("_built")!=true: return
+	if guest_mode:
+		if _guest_view==null: _guest_view = load(MODULE_DIR+"/guest_presentation.gd").new()
+		_guest_view.configure(nodes.world)
 	var intro: Variant = nodes.world.get("intro")
 	if intro is Node and intro.has_method("abort"): intro.call("abort")
 	# Only presentation timers run on guests; native world simulation stays off.
@@ -1174,6 +1186,10 @@ func apply_confirmed_event(event: Dictionary) -> Dictionary:
 		var loose_result: Dictionary = _loose_module().apply_delta(patch.loose_delta,nodes.world.get_tree().root)
 		if not loose_result.ok: return loose_result
 	if patch.has("held_loose"): _loose_module().accept_holds(patch.held_loose)
+	elif patch.has("held_loose_links"):
+		var holds: Dictionary = load(MODULE_DIR+"/held_replica.gd").new().expand(patch.held_loose_links,_loose_module().current)
+		if not holds.ok: return _error("SNAPSHOT_INVALID")
+		_loose_module().accept_holds(holds.value)
 	if patch.has("tool_loads"): _tool_loads().accept(patch.tool_loads)
 	timings.cargo_and_loose = Time.get_ticks_usec()-stamp
 	last_apply_timings = timings
@@ -1308,6 +1324,7 @@ func pump_guest_visuals() -> void:
 			_props_replica.follow_local(nodes.props,_local_peer,camera.global_transform)
 		if camera is Camera3D and camera.is_inside_tree():
 			var eye: Vector3 = camera.global_position
+			if _guest_view!=null: _guest_view.pump(eye)
 			if nodes.field.has_method("tick_lod"): nodes.field.call("tick_lod",eye)
 			if nodes.has("world"):
 				var detail: Variant = nodes.world.get("detail")
@@ -1319,7 +1336,9 @@ func _patch_valid(patch: Dictionary) -> bool:
 	# Cross-field checks below must never depend on wire dictionary order.
 	if patch.has("state") and not patch.state is Dictionary: return false
 	if patch.has("state_delta") and (not patch.state_delta is Dictionary or patch.has("state")): return false
+	if patch.has("loose") and not patch.loose is Dictionary: return false
 	if patch.has("loose_delta") and (not patch.loose_delta is Dictionary or patch.has("loose")): return false
+	if patch.has("held_loose_links") and patch.has("held_loose"): return false
 	if patch.has("props") and not patch.props is Array: return false
 	if patch.has("belts_delta"):
 		if patch.has("belts") or not _guest_belts_ready or not nodes.has("world") or _guest_belts_world!=nodes.world.get_instance_id(): return false
@@ -1333,8 +1352,8 @@ func _patch_valid(patch: Dictionary) -> bool:
 	native.erase("quest")
 	if not _safe_native_data(native,0): return false
 	for key in patch:
-		if key not in ["state","state_delta","tech","heights","field","buildings","buildings_delta","props","held_props","belts","belts_delta","loose","loose_delta","held_loose","tool_loads","settings","quest","countdown"]: return false
-		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","buildings_delta":"builds","props":"props","held_props":"props","belts":"world","belts_delta":"world","loose":"world","loose_delta":"world","held_loose":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
+		if key not in ["state","state_delta","tech","heights","field","buildings","buildings_delta","props","held_props","belts","belts_delta","loose","loose_delta","held_loose","held_loose_links","tool_loads","settings","quest","countdown"]: return false
+		var role: String = {"state":"state","state_delta":"state","tech":"tech","heights":"field","field":"field","buildings":"builds","buildings_delta":"builds","props":"props","held_props":"props","belts":"world","belts_delta":"world","loose":"world","loose_delta":"world","held_loose":"world","held_loose_links":"world","tool_loads":"state","settings":"cfg","quest":"world","countdown":"world"}[key]
 		if not nodes.has(role): return false
 		if key=="countdown":
 			if not patch[key] is Dictionary or patch[key].size()!=1 or typeof(patch[key].get("seconds"))!=TYPE_INT or patch[key].seconds<0 or patch[key].seconds>86400: return false
@@ -1381,6 +1400,13 @@ func _patch_valid(patch: Dictionary) -> bool:
 		if key == "loose" and (not patch.loose is Dictionary or not _loose_module().validate(patch.loose)): return false
 		if key == "loose_delta" and not _loose_module().validate_delta(patch.loose_delta): return false
 		if key == "tool_loads" and not _tool_loads().validate(patch.tool_loads): return false
+		if key == "held_loose_links":
+			var source: Dictionary = patch.get("loose",_loose_module().current)
+			if patch.has("loose_delta"):
+				var merged: Dictionary = _loose_module().merge_delta(patch.loose_delta)
+				if not merged.ok: return false
+				source = merged.value
+			if not load(MODULE_DIR+"/held_replica.gd").new().expand(patch.held_loose_links,source).ok: return false
 		if key == "held_loose":
 			var loose: Variant = patch.get("loose",_loose_module().current)
 			if patch.has("loose_delta"):

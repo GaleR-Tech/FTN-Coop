@@ -116,4 +116,21 @@ func run(tree: SceneTree) -> Array[String]:
 	await tree.process_frame
 	runtime.queue_free()
 	await tree.process_frame
+	for build in ["26260645", "26243427", "unknown-build"]:
+		var build_runtime: Node = load("res://mods/ftn_coop/coop_runtime.gd").new()
+		var build_wire: Node = load("res://tests/fixtures/pipe_transport.gd").new()
+		var build_game: RefCounted = load("res://tests/fixtures/network_game_boundary.gd").new()
+		build_game.tree = tree
+		tree.root.add_child(build_runtime)
+		build_runtime.configure(build_game,build_wire,build,"0.7.2")
+		build_wire.simulate_invitation(42)
+		if build=="26260645":
+			if build_wire.join_calls!=1 or build_runtime.network.session.state!=build_runtime.network.session.State.JOINING:
+				errors.append("A V71 invitation must reach the normal joining lifecycle.")
+		elif build_wire.join_calls!=0:
+			errors.append("An unsupported game build must be rejected before transport joins.")
+		build_runtime.network.leave()
+		await tree.process_frame
+		build_runtime.queue_free()
+		await tree.process_frame
 	return errors

@@ -12,11 +12,13 @@ var _needles: MultiMesh
 var _native_mesh: Mesh
 var _native_material: Material
 var held: Array = []
+var hold_frames := {}
 var _draw_slots: Dictionary = {}
 var _local_peer := 0
 var _local_player: WeakRef
 
 func capture_holds(players: Dictionary) -> Array:
+	hold_frames.clear()
 	var rows := []
 	for peer in players:
 		var player: Node = players[peer]
@@ -25,6 +27,7 @@ func capture_holds(players: Dictionary) -> Array:
 		var camera: Variant = player.get("camera")
 		if hand is Node and hand.has_method("held_bodies") and camera is Node3D:
 			var frame: Transform3D = camera.global_transform.affine_inverse()
+			hold_frames[Vector2i(int(peer),0)] = frame
 			for body in hand.call("held_bodies"):
 				if is_instance_valid(body) and body is Node3D and _ids.has(body):
 					rows.append({"id":_ids[body],"peer":int(peer),"tool":0,"offset":frame*body.global_transform})
@@ -32,6 +35,7 @@ func capture_holds(players: Dictionary) -> Array:
 			var tool: Variant = player.get(role)
 			if not tool is Node or not tool.get("_riding") is Dictionary or not tool.get("body") is Node3D: continue
 			var frame: Transform3D = tool.get("body").global_transform.affine_inverse()
+			hold_frames[Vector2i(int(peer),1 if role=="shovel" else 2)] = frame
 			for body in tool.get("_riding").values():
 				if is_instance_valid(body) and body is Node3D and _ids.has(body):
 					rows.append({"id":_ids[body],"peer":int(peer),"tool":1 if role=="shovel" else 2,"offset":frame*body.global_transform})
@@ -338,6 +342,7 @@ func close() -> void:
 	_root = null
 	_ids.clear()
 	held.clear()
+	hold_frames.clear()
 	_local_peer = 0
 	_local_player = null
 	_draw_slots.clear()

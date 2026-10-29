@@ -1,5 +1,7 @@
 extends Node
 
+const GameBindings = preload("res://mods/ftn_coop/game_bindings.gd")
+
 var network: Node
 var ui: CanvasLayer
 var presence: Node3D
@@ -112,7 +114,7 @@ func refresh_world() -> void:
 		ui.set_session_closing(true)
 		return
 	var checked: Dictionary = _adapter.probe(get_tree().root)
-	ui.set_host_available(checked.ok,"Erstelle eine private Sitzung und lade bis zu drei Freunde ein." if checked.ok else (ui.ERRORS.BUILD_UNVERIFIED if _build!="25963876" else "Lade einen Spielstand, um eine Sitzung zu erstellen."))
+	ui.set_host_available(checked.ok,"Erstelle eine private Sitzung und lade bis zu drei Freunde ein." if checked.ok else (ui.ERRORS.BUILD_UNVERIFIED if not GameBindings.supports_build(_build) else "Lade einen Spielstand, um eine Sitzung zu erstellen."))
 
 func start_host() -> void:
 	var checked: Dictionary = _adapter.probe(get_tree().root)
@@ -128,7 +130,7 @@ func start_host() -> void:
 		ui.set_panel_open(true)
 
 func join_invitation(lobby: int) -> void:
-	if _build!="25963876":
+	if not GameBindings.supports_build(_build):
 		ui.show_error("BUILD_UNVERIFIED")
 		return
 	if lobby<=0:

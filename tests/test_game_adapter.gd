@@ -58,6 +58,11 @@ func run(tree: SceneTree) -> Array[String]:
 		errors.append("An untested build must not inherit verified bindings.")
 	if not bindings.check_evidence(bindings.verified_evidence("25963876")).get("ok", false):
 		errors.append("The successfully integration-tested demo build is not registered.")
+	if not bindings.check_evidence(bindings.verified_evidence("26260645")).get("ok", false):
+		errors.append("V71 must satisfy the verified game capability gate.")
+	for unknown_build in ["26240210", "26243427", "26260646", ""]:
+		if bindings.check_evidence(bindings.verified_evidence(unknown_build)).get("ok", false):
+			errors.append("Only explicitly supported builds may satisfy the capability gate: "+unknown_build)
 	var evidence := {
 		"snapshot_capture": true, "snapshot_restore": true, "action_capture": true,
 		"host_apply": true, "guest_mutation_guard": true, "machine_host_only": true,

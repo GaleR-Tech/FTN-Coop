@@ -5,6 +5,12 @@ var perf := {}
 var maximum_queue_bytes := 0
 var maximum_queue_packets := 0
 var action_arrivals := {}
+var trace := []
+var event_shape_active := false
+var _peak_patch := {}
+var _peak_packed := 0
+var _peak_raw := 0
+var compact_hold_events := 0
 
 func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> Dictionary:
 	var stamped := body.duplicate()
@@ -15,7 +21,20 @@ func _queue(peer: int, kind: String, body: Dictionary, reliable: bool=true) -> D
 		stamped._test_sent_us = arrival.sent
 		stamped._test_arrived_us = arrival.arrived
 		stamped._test_ack_us = now
-	return super._queue(peer,kind,stamped,reliable)
+	var result := super._queue(peer,kind,stamped,reliable)
+	if result.ok and kind=="ACTION_RESULT" and not _tx.is_empty():
+		_tx[-1]._test_ack_sequence = int(body.get("sequence",0))
+		_tx[-1]._test_ack_queued_us = Time.get_ticks_usec()
+	return result
+
+func _drain_packets(delta: float) -> void:
+	var acknowledgements := []
+	for packet in _tx:
+		if packet.has("_test_ack_sequence"): acknowledgements.append(packet)
+	super._drain_packets(delta)
+	for packet in acknowledgements:
+		if packet not in _tx and trace.size()<4096:
+			trace.append({"phase":"ack_sent","peer":packet.peer,"sequence":packet._test_ack_sequence,"queue_ms":(Time.get_ticks_usec()-int(packet._test_ack_queued_us))/1000.0})
 
 func _process(delta: float) -> void:
 	var started := Time.get_ticks_usec()
@@ -28,7 +47,21 @@ func _prepare_event(event: Dictionary) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var result := super._prepare_event(event)
 	record("encode_event",Time.get_ticks_usec()-started)
+	if event_shape_active and result.ok and not result.value.is_empty():
+		if event.get("patch",{}).has("held_loose_links"): compact_hold_events += 1
+		var header: Dictionary = result.value[0]
+		if int(header.get("total_bytes",0))>_peak_packed:
+			_peak_packed = int(header.total_bytes)
+			_peak_raw = int(header.raw_bytes)
+			_peak_patch = event.get("patch",{})
 	return result
+
+func profile_event_fields() -> Dictionary:
+	var fields := {}
+	for key in _peak_patch:
+		var encoded: Dictionary = load(get_script().resource_path.get_base_dir()+"/value_codec.gd").new().encode({key:_peak_patch[key]},64*1024*1024)
+		if encoded.ok: fields[str(key)] = {"raw":encoded.value.size(),"packed":encoded.value.compress(FileAccess.COMPRESSION_ZSTD).size()}
+	return {"raw":_peak_raw,"packed":_peak_packed,"fields":fields,"compact_hold_events":compact_hold_events}
 
 func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 	var started := Time.get_ticks_usec()
@@ -43,6 +76,7 @@ func _on_message(peer: int, channel: int, bytes: PackedByteArray) -> void:
 				record("action_outbound",int(body._test_arrived_us)-int(body._test_sent_us))
 				record("action_host",int(body._test_ack_us)-int(body._test_arrived_us))
 				record("action_return",now-int(body._test_ack_us))
+				if trace.size()<4096: trace.append({"phase":"ack_received","sequence":body.sequence,"outbound_ms":(int(body._test_arrived_us)-int(body._test_sent_us))/1000.0,"host_ms":(int(body._test_ack_us)-int(body._test_arrived_us))/1000.0,"return_ms":(now-int(body._test_ack_us))/1000.0})
 	super._on_message(peer,channel,bytes)
 	record("receive_message",Time.get_ticks_usec()-started)
 

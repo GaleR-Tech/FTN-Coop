@@ -1,6 +1,8 @@
 extends Node
 
-const VERSION := "0.7.1"
+const GameBindings = preload("res://mods/ftn_coop/game_bindings.gd")
+
+const VERSION := "0.7.2"
 const REQUIRED_CAPABILITIES := [
 	"snapshot_capture", "snapshot_restore", "action_capture", "host_apply",
 	"guest_mutation_guard", "machine_host_only", "player_pose", "isolated_guest_session", "host_save",
@@ -116,7 +118,7 @@ func _run_session_check() -> void:
 	var adapter: RefCounted = load(base_dir + "/game_adapter.gd").new()
 	var detected_build: String = adapter.game_build()
 	var result := {"build": detected_build, "status": "RUNNING", "cleanup": false}
-	if detected_build != "25963876":
+	if not GameBindings.supports_build(detected_build):
 		result.status = "BUILD_UNVERIFIED"
 	else:
 		var transport: Node = load(base_dir + "/steam_transport.gd").new()

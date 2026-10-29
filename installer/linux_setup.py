@@ -14,7 +14,7 @@ GITHUB = "https://github.com/GaleR-Tech/FTN-Coop"
 COFFEE = "https://buymeacoffee.com/galertech"
 TEXT = {
     "title": ("Find The Needle · Koop · Linux", "Find The Needle · Co-op · Linux"),
-    "intro": ("Für die Windows-Demo V66 unter Steam Proton.", "For the Windows V66 demo running through Steam Proton."),
+    "intro": ("Für die Windows-Demo V71 unter Steam Proton.", "For the Windows V71 demo running through Steam Proton."),
     "folder": ("Demo-Ordner", "Demo folder"),
     "browse": ("Ordner auswählen …", "Browse …"),
     "install": ("Installieren", "Install"),
